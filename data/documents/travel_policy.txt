@@ -1,0 +1,5 @@
+Employees can claim travel reimbursement for approved business trips.
+
+The standard hotel reimbursement limit is 5000 INR per night.
+
+Receipts must be submitted within 15 days of completing the trip.
