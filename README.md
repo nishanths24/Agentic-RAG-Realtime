@@ -9,7 +9,7 @@
 
 ---
 
-## 📌 Project Overview
+## Project Overview
 
 **Agentic RAG Realtime** is an intelligent Retrieval-Augmented Generation system designed to combine document retrieval with real-time web & API tools for dynamic, agentic reasoning.
 
@@ -20,7 +20,7 @@
 
 ---
 
-## 🗺️ Project Roadmap & Current Progress
+## Project Roadmap & Current Progress
 
 - [x] **Project Scaffolding & Architecture**
 - [x] **Document Ingestion & Text Normalization**
@@ -33,7 +33,7 @@
 
 ---
 
-## 📂 Project Structure
+## Project Structure
 
 ```text
 Agentic RAG Realtime/
@@ -57,7 +57,7 @@ Agentic RAG Realtime/
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 ### 1. Clone the Repository
 ```bash
@@ -86,7 +86,7 @@ python -m unittest discover tests
 
 ---
 
-## 🛠️ Tech Stack
+## Tech Stack
 - **Language**: Python 3.11+
 - **Testing**: `unittest`
 - **CI/CD**: GitHub Actions
@@ -94,5 +94,5 @@ python -m unittest discover tests
 
 ---
 
-## 👤 Author
+## Author
 - **Nishanth S** - [nishanths24](https://github.com/nishanths24)
