@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 from fastapi.testclient import TestClient
 
 from agentic_rag.api.app import create_app
@@ -28,8 +29,9 @@ def test_api_health_and_ask(tmp_settings, fake_embedder, store, monkeypatch):
     def fake_stack():
         return tmp_settings, orch, indexer, store
 
-    monkeypatch.setattr("agentic_rag.api.app.load_stack", lambda: (orch, indexer, store))
-    monkeypatch.setattr("agentic_rag.api.app.get_settings", lambda: tmp_settings)
+    api_module = sys.modules["agentic_rag.api.app"]
+    monkeypatch.setattr(api_module, "load_stack", lambda: (orch, indexer, store))
+    monkeypatch.setattr(api_module, "get_settings", lambda: tmp_settings)
 
     client = TestClient(create_app())
     health = client.get("/health")

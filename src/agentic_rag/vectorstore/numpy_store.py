@@ -140,7 +140,7 @@ class NumpyVectorStore:
 
     def persist(self) -> None:
         self.directory.mkdir(parents=True, exist_ok=True)
-        tmp_vectors = self.directory / "vectors.npy.tmp"
+        tmp_vectors = self.directory / "vectors.tmp.npy"
         np.save(tmp_vectors, self._matrix)
         tmp_vectors.replace(self.vectors_path)
         meta = {
