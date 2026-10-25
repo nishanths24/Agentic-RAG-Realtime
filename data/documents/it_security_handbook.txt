@@ -1,0 +1,7 @@
+IT Security Handbook
+
+Passwords must be at least 12 characters and stored only in the approved password manager.
+
+Never share VPN credentials. Report phishing to security@example.com.
+
+Laptops must be encrypted. Public USB drives are not allowed on company machines.

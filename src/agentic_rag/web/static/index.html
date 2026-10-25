@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Aether · Agentic RAG</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,650&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <div class="atmosphere" aria-hidden="true"></div>
+  <div class="app">
+    <aside class="rail">
+      <div class="brand">
+        <div class="mark">Æ</div>
+        <div>
+          <p class="eyebrow">Realtime knowledge desk</p>
+          <h1>Aether</h1>
+        </div>
+      </div>
+      <p class="lede">Ask policy questions, live time, weather, or currency. Every answer is grounded in documents or tools — never invented.</p>
+      <section>
+        <h2>Indexed sources</h2>
+        <ul id="sources" class="source-list"><li class="muted">Loading corpus…</li></ul>
+      </section>
+      <section>
+        <h2>Try these</h2>
+        <div class="pills" id="pills"></div>
+      </section>
+      <div class="health" id="health">Connecting…</div>
+    </aside>
+
+    <main class="stage">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Grounded answers</p>
+          <h2>Ask with evidence you can inspect</h2>
+        </div>
+        <button id="rebuild" class="ghost" type="button">Rebuild index</button>
+      </header>
+
+      <section id="thread" class="thread" aria-live="polite"></section>
+
+      <form id="composer" class="composer">
+        <label class="sr-only" for="question">Question</label>
+        <textarea id="question" rows="2" maxlength="2000" placeholder="Ask about travel policy, Tokyo time, Paris weather, or convert the meal allowance to INR…"></textarea>
+        <div class="composer-row">
+          <span class="hint">Documents and live tools stay labeled separately.</span>
+          <button type="submit" id="send">Ask Aether</button>
+        </div>
+      </form>
+    </main>
+  </div>
+  <script src="/static/app.js"></script>
+</body>
+</html>

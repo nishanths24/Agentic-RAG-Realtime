@@ -1,7 +1,14 @@
+from __future__ import annotations
 
-print("Hello! My Agentic RAG project is starting.")
+import sys
+from pathlib import Path
 
-project_name = "Agentic RAG with Real-Time Tools"
+ROOT = Path(__file__).resolve().parent
+src = ROOT / "src"
+if str(src) not in sys.path:
+    sys.path.insert(0, str(src))
 
-print("Project:", project_name)
-print("Python environment is ready!")
+from agentic_rag.cli import main
+
+if __name__ == "__main__":
+    raise SystemExit(main())
