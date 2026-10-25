@@ -10,21 +10,58 @@ from agentic_rag.models import Citation, FinalAnswer, RetrievedPassage, ToolResu
 
 _SENTENCE = re.compile(r"(?<=[.!?])\s+")
 _NUM = re.compile(r"-?\d+(?:\.\d+)?")
+_STOP = {
+    "the",
+    "and",
+    "for",
+    "our",
+    "are",
+    "was",
+    "were",
+    "what",
+    "when",
+    "who",
+    "how",
+    "why",
+    "does",
+    "did",
+    "this",
+    "that",
+    "with",
+    "from",
+    "your",
+    "you",
+    "into",
+    "about",
+    "can",
+    "may",
+    "not",
+    "any",
+    "all",
+    "per",
+    "has",
+    "have",
+    "its",
+}
 
 
 def compose_extractive_answer(
     question: str,
     passages: list[RetrievedPassage],
     tool_results: list[ToolResult],
-) -> str:
+) -> tuple[str, list[RetrievedPassage]]:
     parts: list[str] = []
+    used: list[RetrievedPassage] = []
     if passages:
-        sentences = _pick_sentences(question, passages)
-        if sentences:
-            parts.append(" ".join(sentences))
+        selected = _pick_sentences(question, passages)
+        if selected:
+            sentences = [text for text, _ in selected]
+            used = _unique_passages([passage for _, passage in selected])
+            labels = " ".join(f"[D{p.rank}]" for p in used)
+            parts.append(" ".join(sentences) + " " + labels)
         else:
-            parts.append(passages[0].chunk.text.strip())
-        parts[-1] = parts[-1] + " " + " ".join(f"[D{p.rank}]" for p in passages[: min(3, len(passages))])
+            used = [passages[0]]
+            parts.append(_first_usable_paragraph(passages[0].chunk.text) + f" [D{passages[0].rank}]")
     live_bits = []
     t_index = 1
     for result in tool_results:
@@ -34,25 +71,58 @@ def compose_extractive_answer(
         t_index += 1
     if live_bits:
         parts.append(" ".join(live_bits))
-    return " ".join(parts).strip()
+    return " ".join(parts).strip(), used
 
 
-def _pick_sentences(question: str, passages: list[RetrievedPassage]) -> list[str]:
-    q_tokens = {tok for tok in re.findall(r"[a-z0-9]+", question.lower()) if len(tok) > 2}
-    scored: list[tuple[int, str]] = []
+def _content_tokens(text: str) -> set[str]:
+    return {
+        tok
+        for tok in re.findall(r"[a-z0-9]+", text.lower())
+        if len(tok) > 2 and tok not in _STOP
+    }
+
+
+def _split_units(text: str) -> list[str]:
+    units: list[str] = []
+    for block in re.split(r"\n+", text):
+        clean = block.strip().lstrip("#").strip()
+        if len(clean) < 20:
+            continue
+        units.extend(part.strip() for part in _SENTENCE.split(clean) if len(part.strip()) >= 20)
+    return units
+
+
+def _first_usable_paragraph(text: str) -> str:
+    units = _split_units(text)
+    return units[0] if units else text.strip()
+
+
+def _unique_passages(passages: list[RetrievedPassage]) -> list[RetrievedPassage]:
     seen: set[str] = set()
+    unique: list[RetrievedPassage] = []
     for passage in passages:
-        for sentence in _SENTENCE.split(passage.chunk.text):
-            clean = sentence.strip()
-            if len(clean) < 20 or clean in seen:
-                continue
-            tokens = set(re.findall(r"[a-z0-9]+", clean.lower()))
-            score = len(q_tokens & tokens)
+        if passage.chunk.chunk_id in seen:
+            continue
+        seen.add(passage.chunk.chunk_id)
+        unique.append(passage)
+    return unique
+
+
+def _pick_sentences(
+    question: str, passages: list[RetrievedPassage]
+) -> list[tuple[str, RetrievedPassage]]:
+    q_tokens = _content_tokens(question)
+    for passage in passages:
+        local: list[tuple[int, str, RetrievedPassage]] = []
+        for sentence in _split_units(passage.chunk.text):
+            score = len(q_tokens & _content_tokens(sentence))
             if score:
-                scored.append((score, clean))
-                seen.add(clean)
-    scored.sort(key=lambda item: (-item[0], -len(item[1])))
-    return [text for _, text in scored[:4]]
+                local.append((score, sentence, passage))
+        if local:
+            local.sort(key=lambda item: (-item[0], -len(item[1])))
+            best = local[0][0]
+            return [(text, item_passage) for score, text, item_passage in local if score == best][:2]
+    return []
 
 
 def _format_tool(result: ToolResult, index: int) -> str:
@@ -117,21 +187,20 @@ class AnswerGenerator:
                 tool_results=tool_results,
             )
 
+        used_passages = passages
         if self.llm is not None:
             raw = self.llm.generate(  # type: ignore[union-attr]
                 _system_prompt(), _user_prompt(question, passages, tool_results)
             )
-            allowed = {c.label for c in docs + live}
-            allowed_fmt = {f"[{label}]" if not label.startswith("[") else label for label in allowed}
-            # labels stored as D1, allow [D1]
             allowed_fmt = {f"[{c.label}]" for c in docs + live}
             answer, unknown = strip_unknown_labels(raw, allowed_fmt)
             if unknown:
                 caveats.append("Removed citation labels that were not in the retrieved evidence.")
         else:
-            answer = compose_extractive_answer(question, passages, tool_results)
+            answer, used_passages = compose_extractive_answer(question, passages, tool_results)
+            docs = document_citations(used_passages)
 
-        sufficient = bool(passages or live)
+        sufficient = bool(used_passages or live)
         if failed_tools and not live and passages:
             caveats.append("Live information could not be verified; document facts are shown separately.")
 

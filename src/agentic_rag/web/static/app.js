@@ -22,8 +22,8 @@ function escapeHtml(value) {
 function showEmpty() {
   thread.innerHTML = `
     <div class="empty">
-      <h3>Ask once. Inspect everything.</h3>
-      <p>Aether retrieves policy passages, calls live tools when needed, and shows both kinds of evidence.</p>
+      <h3>Ask a question</h3>
+      <p>Agentic RAG retrieves policy passages, calls live tools when needed, and shows both kinds of evidence.</p>
     </div>`;
 }
 

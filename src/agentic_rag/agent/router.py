@@ -15,7 +15,9 @@ _DOCS = re.compile(
 )
 _LIVE = re.compile(r"\b(today|right now|current|now|live|latest)\b", re.I)
 _CITY = re.compile(
-    r"\b(?:in|for|at)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)|\b(Tokyo|Paris|London|Delhi|Mumbai|Kolkata|New York|Berlin|Sydney)\b",
+    r"\b(?:in|for|at)\s+([A-Za-z][A-Za-z]+(?:\s+[A-Za-z][A-Za-z]+)?)|"
+    r"\b(Tokyo|Paris|London|Delhi|Mumbai|Kolkata|New York|Berlin|Sydney)\b",
+    re.I,
 )
 _TZ_MAP = {
     "tokyo": "Asia/Tokyo",
@@ -99,10 +101,17 @@ def maybe_followup_currency(question: str, passage_text: str) -> ToolRequest | N
 
 
 def _extract_city(question: str) -> str | None:
+    lowered = question.lower()
+    for name in sorted(_TZ_MAP, key=len, reverse=True):
+        if re.search(rf"\b{re.escape(name)}\b", lowered):
+            return "New York" if name == "new york" else name.title()
     match = _CITY.search(question)
     if not match:
         return None
-    return (match.group(1) or match.group(2) or "").strip() or None
+    raw = (match.group(1) or match.group(2) or "").strip()
+    if not raw:
+        return None
+    return raw.split()[0]
 
 
 def _extract_currencies(question: str) -> tuple[str, str]:

@@ -12,4 +12,4 @@ question
 
 Ingestion: discover `.txt`/`.md` → normalize → word-aware chunks with metadata → embed → persist `data/index/`.
 
-Interfaces: CLI (`python main.py ...`) and FastAPI (`/ask`, `/health`, `/index`, `/sources`) plus the Aether UI at `/`.
+Interfaces: CLI (`python main.py ...`) and FastAPI (`/ask`, `/health`, `/index`, `/sources`) plus the Agentic RAG UI at `/`.
