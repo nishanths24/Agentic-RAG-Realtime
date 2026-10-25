@@ -54,6 +54,15 @@ cover/
 .env.*
 !.env.example
 
+# Generated indexes, logs, caches
+data/index/
+logs/
+.mypy_cache/
+.ruff_cache/
+*.npy
+*.bin
+*.safetensors
+
 # Editor and IDE directories
 .vscode/
 .idea/
