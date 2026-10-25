@@ -4,12 +4,12 @@
 [![Python Version](https://img.shields.io/badge/Python-3.11%20%7C%203.12-blue?style=for-the-badge&logo=python)](https://www.python.org/)
 [![Build & Test](https://github.com/nishanths24/Agentic-RAG-Realtime/actions/workflows/build.yml/badge.svg)](https://github.com/nishanths24/Agentic-RAG-Realtime/actions)
 
-> 🚧 **Notice: Project Under Active Development**  
+> **Notice: Project Under Active Development**  
 > This project is currently **building (work in progress / not completed)**. Core document ingestion and chunking components are in place, with agentic tool calling and real-time retrieval features actively being implemented.
 
 ---
 
-## 📌 Project Overview
+## Project Overview
 
 **Agentic RAG Realtime** is an intelligent Retrieval-Augmented Generation system designed to combine document retrieval with real-time web & API tools for dynamic, agentic reasoning.
 
@@ -20,20 +20,20 @@
 
 ---
 
-## 🗺️ Project Roadmap & Current Progress
+## Project Roadmap & Current Progress
 
 - [x] **Project Scaffolding & Architecture**
 - [x] **Document Ingestion & Text Normalization**
 - [x] **Sliding Window Chunking with Overlap**
 - [x] **Unit Testing & CI Pipeline (`unittest` + GitHub Actions)**
-- [ ] 🔨 **Embedding Generation & Vector Storage** *(In Progress / Building)*
-- [ ] 🔨 **Agentic Reasoning & Tool Orchestration** *(In Progress / Building)*
+- [ ] **Embedding Generation & Vector Storage** *(In Progress / Building)*
+- [ ] **Agentic Reasoning & Tool Orchestration** *(In Progress / Building)*
 - [ ] ⏳ **Real-Time Tool Integrations (Search, APIs)** *(Upcoming)*
 - [ ] ⏳ **Evaluation & Benchmark Suite** *(Upcoming)*
 
 ---
 
-## 📂 Project Structure
+## Project Structure
 
 ```text
 Agentic RAG Realtime/
@@ -57,7 +57,7 @@ Agentic RAG Realtime/
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 ### 1. Clone the Repository
 ```bash
@@ -86,7 +86,7 @@ python -m unittest discover tests
 
 ---
 
-## 🛠️ Tech Stack
+## Tech Stack
 - **Language**: Python 3.11+
 - **Testing**: `unittest`
 - **CI/CD**: GitHub Actions
@@ -94,5 +94,5 @@ python -m unittest discover tests
 
 ---
 
-## 👤 Author
+## Author
 - **Nishanth S** - [nishanths24](https://github.com/nishanths24)
