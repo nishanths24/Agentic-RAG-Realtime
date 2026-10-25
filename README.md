@@ -4,7 +4,7 @@
 [![Python Version](https://img.shields.io/badge/Python-3.11%20%7C%203.12-blue?style=for-the-badge&logo=python)](https://www.python.org/)
 [![Build & Test](https://github.com/nishanths24/Agentic-RAG-Realtime/actions/workflows/build.yml/badge.svg)](https://github.com/nishanths24/Agentic-RAG-Realtime/actions)
 
-> 🚧 **Notice: Project Under Active Development**  
+> **Notice: Project Under Active Development**  
 > This project is currently **building (work in progress / not completed)**. Core document ingestion and chunking components are in place, with agentic tool calling and real-time retrieval features actively being implemented.
 
 ---
@@ -26,8 +26,8 @@
 - [x] **Document Ingestion & Text Normalization**
 - [x] **Sliding Window Chunking with Overlap**
 - [x] **Unit Testing & CI Pipeline (`unittest` + GitHub Actions)**
-- [ ] 🔨 **Embedding Generation & Vector Storage** *(In Progress / Building)*
-- [ ] 🔨 **Agentic Reasoning & Tool Orchestration** *(In Progress / Building)*
+- [ ] **Embedding Generation & Vector Storage** *(In Progress / Building)*
+- [ ] **Agentic Reasoning & Tool Orchestration** *(In Progress / Building)*
 - [ ] ⏳ **Real-Time Tool Integrations (Search, APIs)** *(Upcoming)*
 - [ ] ⏳ **Evaluation & Benchmark Suite** *(Upcoming)*
 
