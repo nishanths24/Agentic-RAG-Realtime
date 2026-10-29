@@ -132,3 +132,172 @@ def test_failed_tool_does_not_invent_numbers():
     answer = gen.generate("convert 50 USD", [], [failed], trace_id="t")
     assert "timeout" in " ".join(answer.caveats).lower() or not answer.sufficient_evidence
     assert "99999" not in answer.answer
+
+
+def test_currency_direction_extraction():
+    from agentic_rag.agent.router import _extract_currencies
+
+    assert _extract_currencies("Convert 50 USD to INR") == ("USD", "INR")
+    assert _extract_currencies("How much is 50 USD in INR?") == ("USD", "INR")
+    assert _extract_currencies("Convert 5000 INR into USD") == ("INR", "USD")
+    assert _extract_currencies("What is the USD equivalent of 5000 INR?") == ("INR", "USD")
+    assert _extract_currencies("The policy gives a daily meal allowance in USD. What's that in INR today?") == ("USD", "INR")
+    assert _extract_currencies("Policy meal allowance converted to INR") == ("USD", "INR")
+    assert _extract_currencies("Convert 100 EUR to USD") == ("EUR", "USD")
+    src, dst = _extract_currencies("What is the daily meal allowance in INR?")
+    assert src != dst
+    assert dst == "INR"
+
+
+def test_router_currency_decisions():
+    router = RuleRouter()
+    r1 = router.route("Convert 50 USD to INR")
+    assert not r1.use_documents
+    assert len(r1.tools) == 1
+    assert r1.tools[0].tool_name == "currency_convert"
+    assert r1.tools[0].arguments == {"amount": 50, "from_currency": "USD", "to_currency": "INR"}
+
+    r2 = router.route("What is the USD equivalent of 5000 INR?")
+    assert not r2.use_documents
+    assert len(r2.tools) == 1
+    assert r2.tools[0].tool_name == "currency_convert"
+    assert r2.tools[0].arguments == {"amount": 5000, "from_currency": "INR", "to_currency": "USD"}
+
+    r3 = router.route("What is the daily meal allowance in INR?")
+    assert r3.use_documents
+    assert not r3.tools
+
+
+def test_maybe_followup_currency_extracts_meal_allowance_not_hotel():
+    from agentic_rag.agent.router import maybe_followup_currency
+
+    passage_text = (
+        "Hotel: The standard hotel reimbursement limit is 5000 INR per night.\n\n"
+        "Meals: The daily meal allowance is 50 USD per day for international travel and 1500 INR per day for domestic travel."
+    )
+    question = "The policy gives a daily meal allowance in USD. What's that in INR today?"
+    follow = maybe_followup_currency(question, passage_text)
+
+    assert follow is not None
+    assert follow.tool_name == "currency_convert"
+    assert follow.arguments["amount"] == 50
+    assert follow.arguments["from_currency"] == "USD"
+    assert follow.arguments["to_currency"] == "INR"
+
+
+def test_maybe_followup_currency_multiple_amounts_and_currencies():
+    from agentic_rag.agent.router import maybe_followup_currency
+
+    # Case 1: Both hotel limit (5000 INR) and meal allowance (50 USD) occur in the SAME sentence
+    single_sentence = "The standard hotel reimbursement is 5000 INR per night, while the daily meal allowance is 50 USD per day for international travel."
+    q1 = "The policy gives a daily meal allowance in USD. What's that in INR today?"
+    follow1 = maybe_followup_currency(q1, single_sentence)
+    assert follow1 is not None
+    assert follow1.arguments["amount"] == 50
+    assert follow1.arguments["from_currency"] == "USD"
+    assert follow1.arguments["to_currency"] == "INR"
+
+    # Case 2: Source and target currencies both appear in the same sentence for meals
+    same_sentence_both_currencies = "Meals: The daily meal allowance is 50 USD per day for international travel and 1500 INR per day for domestic travel."
+    follow2 = maybe_followup_currency(q1, same_sentence_both_currencies)
+    assert follow2 is not None
+    assert follow2.arguments["amount"] == 50
+    assert follow2.arguments["from_currency"] == "USD"
+    assert follow2.arguments["to_currency"] == "INR"
+
+    # Case 3: Multiple amounts and currencies where source currency is not named in question (explicit conversion requested)
+    q3 = "Policy meal allowance converted to INR"
+    mixed_sentence = "The standard hotel reimbursement is 5000 INR per night, while the daily meal allowance is 50 USD per day."
+    follow3 = maybe_followup_currency(q3, mixed_sentence)
+    assert follow3 is not None
+    assert follow3.arguments["amount"] == 50
+    assert follow3.arguments["from_currency"] == "USD"
+    assert follow3.arguments["to_currency"] == "INR"
+
+
+def test_policy_allowance_already_in_requested_currency_does_not_convert():
+    from agentic_rag.agent.router import maybe_followup_currency
+
+    router = RuleRouter()
+    decision = router.route("What is the daily meal allowance in INR?")
+    assert decision.use_documents
+    assert not decision.tools
+    assert decision.reasoning == "Policy/document question: retrieve local sources only."
+
+    passage = (
+        "The daily meal allowance is 50 USD per day for international travel "
+        "and 1500 INR per day for domestic travel."
+    )
+    follow = maybe_followup_currency("What is the daily meal allowance in INR?", passage)
+    assert follow is None
+
+
+def test_orchestrator_daily_meal_allowance_in_inr_no_conversion(tmp_settings, fake_embedder, store):
+    policy_path = tmp_settings.documents_dir / "travel_policy.txt"
+    policy_path.write_text(
+        "Meals: The daily meal allowance is 50 USD per day for international travel "
+        "and 1500 INR per day for domestic travel.\n",
+        encoding="utf-8",
+    )
+    indexer = Indexer(tmp_settings, fake_embedder, store)
+    indexer.build(rebuild=True)
+    registry = ToolRegistry()
+    orch = Orchestrator(tmp_settings, Retriever(store, fake_embedder), registry)
+    answer = orch.ask("What is the daily meal allowance in INR?")
+
+    assert answer.sufficient_evidence
+    assert answer.document_evidence
+    assert not answer.live_evidence
+    assert "1500" in answer.answer
+    assert not any(step.name.startswith("tool:currency_convert") for step in answer.trace)
+    assert not any(step.name == "followup_currency" for step in answer.trace)
+
+
+def test_maybe_followup_currency_hotel_question():
+    from agentic_rag.agent.router import maybe_followup_currency
+
+    passage_text = (
+        "Hotel: The standard hotel reimbursement limit is 5000 INR per night.\n\n"
+        "Meals: The daily meal allowance is 50 USD per day for international travel."
+    )
+    question = "What is the hotel reimbursement limit in USD?"
+    follow = maybe_followup_currency(question, passage_text)
+
+    assert follow is not None
+    assert follow.tool_name == "currency_convert"
+    assert follow.arguments["amount"] == 5000
+    assert follow.arguments["from_currency"] == "INR"
+    assert follow.arguments["to_currency"] == "USD"
+
+
+def test_orchestrator_meal_allowance_conversion_mocked(tmp_settings, fake_embedder, store):
+    import httpx
+    from agentic_rag.tools.currency import CurrencyConvertTool
+
+    indexer = Indexer(tmp_settings, fake_embedder, store)
+    indexer.build(rebuild=True)
+
+    def mock_currency_handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "amount": 50.0,
+                "base": "USD",
+                "date": "2026-10-25",
+                "rates": {"INR": 4200.0},
+            },
+        )
+
+    mock_client = httpx.Client(transport=httpx.MockTransport(mock_currency_handler))
+    registry = ToolRegistry([CurrencyConvertTool(client=mock_client)])
+
+    orch = Orchestrator(tmp_settings, Retriever(store, fake_embedder), registry)
+    answer = orch.ask("The policy gives a daily meal allowance in USD. What's that in INR today?")
+
+    assert answer.sufficient_evidence
+    assert answer.document_evidence
+    assert answer.live_evidence
+    assert "50 USD" in answer.answer
+    assert "4200" in answer.answer
+    assert any(step.name == "tool:currency_convert" and step.ok for step in answer.trace)
+    assert not any("5000" in str(step.detail) and "INR" in str(step.detail) and "USD" in str(step.detail) for step in answer.trace)

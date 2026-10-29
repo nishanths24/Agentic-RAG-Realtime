@@ -45,3 +45,37 @@ def test_api_health_and_ask(tmp_settings, fake_embedder, store, monkeypatch):
     assert "answer" in body
     assert "document_evidence" in body
     assert "sk-" not in str(body)
+
+
+def test_static_ui_served_without_obsolete_pills():
+    client = TestClient(create_app())
+    html = client.get("/")
+    assert html.status_code == 200
+    assert "sources-fold" in html.text
+    assert "rebuild" in html.text
+    assert "new-chat" in html.text
+    assert "sidebar" in html.text
+    assert "sources-search" in html.text
+    assert "pills" not in html.text
+
+    js = client.get("/static/app.js")
+    assert js.status_code == 200
+    assert "pills" not in js.text
+    assert "EXAMPLES" not in js.text
+    assert "showEmpty" in js.text
+    assert "refreshMeta" in js.text
+    assert "welcome-heading" in js.text
+    assert "suggestion-chip" in js.text
+    assert "Hello, welcome to Agentic RAG" in js.text
+    assert "What is the hotel reimbursement limit?" in js.text
+    assert "What is the daily meal allowance in INR?" in js.text
+    assert "What time is it in Tokyo right now?" in js.text
+
+    css = client.get("/static/styles.css")
+    assert css.status_code == 200
+    assert ".app" in css.text
+    assert ".rail" in css.text
+    assert ".stage" in css.text
+    assert ".welcome-screen" in css.text
+    assert ".composer" in css.text
+    assert ".feature-card" in css.text

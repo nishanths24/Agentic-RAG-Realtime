@@ -1,5 +1,4 @@
-from __future__ import annotations
-
+import os
 import re
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
@@ -11,7 +10,7 @@ from agentic_rag.errors import ToolTimeoutError, ToolUnavailableError, ToolValid
 from agentic_rag.models import ToolResult
 
 _CODE = re.compile(r"^[A-Z]{3}$")
-_FRANKFURTER = "https://api.frankfurter.app/latest"
+_DEFAULT_FRANKFURTER = "https://api.frankfurter.dev/v1/latest"
 
 
 class CurrencyConvertTool:
@@ -28,8 +27,15 @@ class CurrencyConvertTool:
     }
     requires_credentials = False
 
-    def __init__(self, client: httpx.Client | None = None) -> None:
+    def __init__(self, client: httpx.Client | None = None, endpoint: str | None = None) -> None:
         self._client = client
+        self._endpoint = (
+            endpoint
+            or os.getenv("FRANKFURTER_URL")
+            or os.getenv("FRANKFURTER_BASE_URL")
+            or os.getenv("CURRENCY_API_URL")
+            or _DEFAULT_FRANKFURTER
+        )
 
     def validate(self, arguments: dict[str, Any]) -> dict[str, Any]:
         try:
@@ -55,26 +61,38 @@ class CurrencyConvertTool:
         }
         try:
             if self._client is None:
-                response = httpx.get(_FRANKFURTER, params=params, timeout=timeout_s)
+                response = httpx.get(self._endpoint, params=params, timeout=timeout_s, follow_redirects=True)
             else:
-                response = self._client.get(_FRANKFURTER, params=params, timeout=timeout_s)
+                response = self._client.get(self._endpoint, params=params, timeout=timeout_s, follow_redirects=True)
         except httpx.TimeoutException as exc:
             raise ToolTimeoutError("Currency API timed out") from exc
         except httpx.HTTPError as exc:
             raise ToolUnavailableError("Currency API is unavailable") from exc
 
-        if response.status_code >= 400:
+        if response.status_code != 200:
             raise ToolUnavailableError(f"Currency API HTTP {response.status_code}")
         try:
             payload = response.json()
-            rate = Decimal(str(payload["rates"][args["to_currency"]])) / Decimal(str(args["amount"]))
-            converted = Decimal(str(payload["rates"][args["to_currency"]]))
-        except (KeyError, TypeError, ValueError, InvalidOperation) as exc:
+            if not isinstance(payload, dict):
+                raise ToolUnavailableError("Currency API returned an unexpected payload")
+            rates = payload.get("rates")
+            if not isinstance(rates, dict) or args["to_currency"] not in rates:
+                raise ToolUnavailableError("Currency API returned an unexpected payload")
+            converted = Decimal(str(rates[args["to_currency"]]))
+            if converted.is_nan() or converted.is_infinite() or converted <= 0:
+                raise ToolUnavailableError("Currency API returned an invalid exchange rate")
+            rate = converted / Decimal(str(args["amount"]))
+            if rate.is_nan() or rate.is_infinite() or rate <= 0:
+                raise ToolUnavailableError("Currency API returned an invalid exchange rate")
+        except ToolUnavailableError:
+            raise
+        except (KeyError, TypeError, ValueError, InvalidOperation, ZeroDivisionError) as exc:
             raise ToolUnavailableError("Currency API returned an unexpected payload") from exc
 
         converted = converted.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
         rate = rate.quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
         now = datetime.now(timezone.utc)
+        host = getattr(getattr(response, "url", None), "host", None) or "api.frankfurter.dev"
         return ToolResult(
             tool_name=self.name,
             ok=True,
@@ -88,5 +106,5 @@ class CurrencyConvertTool:
             },
             error=None,
             retrieved_at=now,
-            source="api.frankfurter.app",
+            source=host,
         )

@@ -3,43 +3,165 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Agentic RAG</title>
+  <title>Agentic RAG — AI Workspace</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/static/styles.css" />
 </head>
 <body>
-  <div class="app">
-    <aside class="rail">
-      <div class="brand">
-        <h1>Agentic RAG</h1>
-        <p class="lede">Ask a question. The app retrieves local documents and calls live tools only when needed.</p>
+  <div class="app" id="app">
+    <!-- Left Navigation Sidebar -->
+    <aside class="rail" id="sidebar" aria-label="Sidebar Navigation">
+      <div class="rail-header">
+        <div class="brand">
+          <div class="brand-icon" aria-hidden="true">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="12" r="9" stroke="url(#brand-grad)" stroke-width="2.5" />
+              <circle cx="12" cy="12" r="3.5" fill="url(#brand-grad)" />
+              <defs>
+                <linearGradient id="brand-grad" x1="4" y1="4" x2="20" y2="20" gradientUnits="userSpaceOnUse">
+                  <stop stop-color="#ea580c" />
+                  <stop offset="1" stop-color="#f97316" />
+                </linearGradient>
+              </defs>
+            </svg>
+          </div>
+          <span class="brand-name">Agentic RAG</span>
+        </div>
+        <button id="sidebar-close" class="icon-btn mobile-only" aria-label="Close sidebar" type="button">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
       </div>
-      <section>
-        <h2>Indexed sources</h2>
-        <ul id="sources" class="source-list"><li class="muted">Loading…</li></ul>
-      </section>
-      <section>
-        <h2>Try these</h2>
-        <div class="pills" id="pills"></div>
-      </section>
-      <div class="health" id="health">Connecting…</div>
+
+      <!-- Search field for indexed sources -->
+      <div class="sidebar-search">
+        <div class="search-input-wrap">
+          <svg class="search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+          <input type="text" id="sources-search" class="search-field" placeholder="Search sources..." aria-label="Search indexed sources" autocomplete="off" />
+          <kbd class="kbd-badge" title="Press Ctrl+K or ⌘K">⌘K</kbd>
+        </div>
+      </div>
+
+      <!-- Primary navigation action -->
+      <div class="rail-actions">
+        <button id="new-chat" class="nav-item-active" type="button">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+          </svg>
+          <span>Chat with AI</span>
+        </button>
+      </div>
+
+      <!-- Indexed sources knowledge section -->
+      <div class="rail-nav">
+        <div class="nav-section-label">Knowledge Base</div>
+        <details class="fold" id="sources-fold" open>
+          <summary>
+            <span class="fold-summary-content">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+              </svg>
+              <span>Indexed Sources</span>
+            </span>
+            <span class="fold-arrow" aria-hidden="true">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </span>
+          </summary>
+          <ul id="sources" class="source-list"><li class="muted">Loading…</li></ul>
+        </details>
+      </div>
+
+      <!-- Sidebar footer with status & rebuild index -->
+      <div class="rail-foot">
+        <div class="status-card">
+          <div class="status-indicator">
+            <span class="status-dot"></span>
+            <span class="status-title">Local Index Active</span>
+          </div>
+          <div class="health" id="health">Connecting…</div>
+        </div>
+        <button id="rebuild" class="ghost" type="button" title="Rebuild vector index from documents">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="23 4 23 10 17 10"></polyline>
+            <polyline points="1 20 1 14 7 14"></polyline>
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+          </svg>
+          <span>Rebuild index</span>
+        </button>
+      </div>
     </aside>
 
-    <main class="stage">
+    <div class="sidebar-backdrop" id="sidebar-backdrop" aria-hidden="true"></div>
+
+    <!-- Main Workspace -->
+    <main class="stage" id="stage">
       <header class="topbar">
-        <h2>Ask a question</h2>
-        <button id="rebuild" class="ghost" type="button">Rebuild index</button>
+        <div class="topbar-left">
+          <button id="sidebar-toggle" class="icon-btn" aria-label="Toggle sidebar" type="button">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="3" y1="12" x2="21" y2="12"></line>
+              <line x1="3" y1="6" x2="21" y2="6"></line>
+              <line x1="3" y1="18" x2="21" y2="18"></line>
+            </svg>
+          </button>
+          <div class="topbar-brand">
+            <span class="topbar-name">Agentic RAG</span>
+          </div>
+        </div>
+        <div class="topbar-right">
+          <button id="topbar-new-chat" class="topbar-new-chat-btn" type="button">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+            <span>New Chat</span>
+          </button>
+        </div>
       </header>
 
-      <section id="thread" class="thread" aria-live="polite"></section>
+      <!-- Scrollable Conversation / Welcome Stage -->
+      <section id="thread" class="thread" aria-live="polite">
+        <!-- Rendered dynamically by app.js (Welcome screen or message cards) -->
+      </section>
 
-      <form id="composer" class="composer">
-        <label class="sr-only" for="question">Question</label>
-        <textarea id="question" rows="2" maxlength="2000" placeholder="Ask about travel policy, Tokyo time, weather, or currency conversion…"></textarea>
-        <div class="composer-row">
-          <span class="hint">Answers show document evidence and live tool results separately.</span>
-          <button type="submit" id="send">Ask</button>
-        </div>
-      </form>
+      <!-- Composer docked at bottom during conversation -->
+      <div class="composer-container" id="composer-container">
+        <form id="composer" class="composer">
+          <label class="sr-only" for="question">Ask a question</label>
+          <div class="composer-box">
+            <div class="composer-top-row">
+              <textarea id="question" rows="1" maxlength="2000" placeholder="Ask about travel policies, expenses, or real-time information..."></textarea>
+            </div>
+            <div class="composer-bottom-bar">
+              <div class="composer-tools-hint">
+                <span class="badge-tag">Grounded RAG</span>
+                <span class="badge-tag">Live Tools</span>
+              </div>
+              <div class="composer-submit-wrap">
+                <button type="submit" id="send" aria-label="Send message" title="Send message (Enter)">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="22" y1="2" x2="11" y2="13"></line>
+                    <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+          <div class="composer-disclaimer">
+            <span>Agentic RAG uses company documents &amp; live tools with verifiable evidence.</span>
+          </div>
+        </form>
+      </div>
     </main>
   </div>
   <script src="/static/app.js"></script>
