@@ -37,6 +37,7 @@ def main(argv: list[str] | None = None) -> int:
     p_serve = sub.add_parser("serve", help="Run the API and UI")
     p_serve.add_argument("--host")
     p_serve.add_argument("--port", type=int)
+    p_serve.add_argument("--reload", action="store_true", help="Auto-reload on code change")
 
     args = parser.parse_args(argv)
     if not args.command:
@@ -51,7 +52,7 @@ def main(argv: list[str] | None = None) -> int:
 
         host = args.host or settings.host
         port = args.port or settings.port
-        uvicorn.run("agentic_rag.api.app:app", host=host, port=port, reload=False)
+        uvicorn.run("agentic_rag.api.app:app", host=host, port=port, reload=args.reload)
         return 0
 
     orchestrator, indexer, store = build_orchestrator(settings)

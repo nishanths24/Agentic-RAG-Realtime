@@ -371,3 +371,87 @@ def test_citation_preservation_for_factual_claims():
     assert "[D2]" in ans_transport
     assert "[D1]" not in ans_transport
     assert used_t == [p2]
+
+
+def test_broad_question_synthesizes_multiple_policy_categories():
+    p1 = RetrievedPassage(
+        chunk=Chunk(
+            chunk_id="doc1:0",
+            doc_id="doc1",
+            source_path="travel_policy.txt",
+            chunk_index=0,
+            text=(
+                "Employees can claim travel reimbursement for approved business trips.\n\n"
+                "Hotel: The standard hotel reimbursement limit is 5000 INR per night. Suite upgrades are not reimbursable."
+            ),
+            char_start=0,
+            char_end=150,
+        ),
+        score=0.8,
+        rank=1,
+    )
+    p2 = RetrievedPassage(
+        chunk=Chunk(
+            chunk_id="doc1:1",
+            doc_id="doc1",
+            source_path="travel_policy.txt",
+            chunk_index=1,
+            text=(
+                "Meals: The daily meal allowance is 50 USD per day for international travel and 1500 INR per day for domestic travel.\n\n"
+                "Flights: Economy class is the default. Business class requires VP approval for flights over 8 hours."
+            ),
+            char_start=151,
+            char_end=350,
+        ),
+        score=0.75,
+        rank=2,
+    )
+    p3 = RetrievedPassage(
+        chunk=Chunk(
+            chunk_id="doc2:0",
+            doc_id="doc2",
+            source_path="expense_guidelines.md",
+            chunk_index=0,
+            text=(
+                "Ground transport: taxis and ride-hailing are reimbursable to and from airports.\n\n"
+                "Receipts must be submitted within 15 days of completing the trip."
+            ),
+            char_start=0,
+            char_end=150,
+        ),
+        score=0.7,
+        rank=3,
+    )
+
+    ans, used = compose_extractive_answer(
+        "What information does the travel policy provide about employee expenses?",
+        [p1, p2, p3],
+        [],
+    )
+
+    assert "5000 INR" in ans
+    assert "50 USD" in ans or "1500 INR" in ans
+    assert "reimbursement" in ans.lower()
+    assert "receipts" in ans.lower() or "15 days" in ans
+    assert "taxis" in ans.lower() or "ground transport" in ans.lower()
+    assert "[D1]" in ans
+    assert "[D2]" in ans
+    assert "[D3]" in ans
+    assert len(used) >= 2
+
+
+def test_unsupported_question_does_not_invent_prohibition_or_reimbursement(tmp_settings, fake_embedder, store):
+    indexer = Indexer(tmp_settings, fake_embedder, store)
+    indexer.build(rebuild=True)
+    orch = Orchestrator(tmp_settings, Retriever(store, fake_embedder), ToolRegistry())
+
+    answer = orch.ask("What is the company's reimbursement policy for private jet travel?")
+
+    assert not answer.sufficient_evidence
+    assert answer.document_evidence == []
+    assert "available documents do not provide sufficient evidence" in answer.answer.lower()
+    assert "private jet travel" in answer.answer.lower()
+    assert "prohibited" not in answer.answer.lower()
+    assert "allowed" not in answer.answer.lower()
+    assert "reimbursable" not in answer.answer.lower()
+    assert any("insufficient evidence" in c.lower() for c in answer.caveats)

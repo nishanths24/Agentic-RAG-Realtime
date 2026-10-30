@@ -44,7 +44,24 @@ def test_api_health_and_ask(tmp_settings, fake_embedder, store, monkeypatch):
     body = ok.json()
     assert "answer" in body
     assert "document_evidence" in body
+    assert body["sufficient_evidence"] is True
     assert "sk-" not in str(body)
+
+    broad = client.post("/ask", json={"question": "What information does the travel policy provide about employee expenses?"})
+    assert broad.status_code == 200
+    broad_body = broad.json()
+    assert broad_body["sufficient_evidence"] is True
+    assert len(broad_body["document_evidence"]) >= 1
+    assert "Company Travel Policy (effective January 2024) [D1]" != broad_body["answer"].strip()
+    assert "50 USD" in broad_body["answer"] or "travel" in broad_body["answer"].lower()
+
+    unsupported = client.post("/ask", json={"question": "What is the company's reimbursement policy for private jet travel?"})
+    assert unsupported.status_code == 200
+    unsupp_body = unsupported.json()
+    assert unsupp_body["sufficient_evidence"] is False
+    assert unsupp_body["document_evidence"] == []
+    assert "available documents do not provide sufficient evidence" in unsupp_body["answer"].lower()
+    assert "private jet travel" in unsupp_body["answer"].lower()
 
 
 def test_static_ui_served_without_obsolete_pills():

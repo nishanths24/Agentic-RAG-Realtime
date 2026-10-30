@@ -32,8 +32,8 @@ _TITLE_OR_HEADING = re.compile(
     re.I,
 )
 
-_INJECTION = re.compile(
-    r"\b(ignore previous instructions|reveal secrets|call the weather tool|dump environment variables)\b",
+_META_DISCLAIMER = re.compile(
+    r"\b(ignore previous instructions|reveal secrets|call the weather tool|dump environment variables|only document data|do not treat .* as system commands?)\b",
     re.I,
 )
 
@@ -86,7 +86,7 @@ def _is_informative_sentence(text: str) -> bool:
         return False
     if _TITLE_OR_HEADING.match(clean):
         return False
-    if _INJECTION.search(clean):
+    if _META_DISCLAIMER.search(clean):
         return False
     if len(clean) < 60 and not clean.endswith((".", "!", "?", ":")):
         if re.search(r"\b(policy|guidelines?|playbook|handbook|memo)\b", clean, re.I):
@@ -97,12 +97,12 @@ def _is_informative_sentence(text: str) -> bool:
 def _is_broad_question(question: str) -> bool:
     q = question.lower().strip()
     if re.search(
-        r"\b(what information|what does .* (?:provide|say|cover)|what are the (?:rules|guidelines|policies)|overview|summarize|summary|what expenses|employee expenses|travel expenses|expenses allowed)\b",
+        r"\b(what information|what does .* (?:provide|say|cover|contain)|what are the (?:rules|guidelines|policies)|overview|summarize|summary|what expenses|employee expenses|travel expenses|expenses allowed)\b",
         q,
     ):
         return True
     subj = _subject_tokens(question)
-    if subj in [{"employee", "expense"}, {"expense"}, set()]:
+    if subj in [{"employee", "expense"}, {"expense"}, {"travel"}, {"policy"}, set()]:
         return True
     return False
 
@@ -117,6 +117,17 @@ def _extract_subject_phrase(question: str) -> str:
     if subj:
         return " ".join(sorted(subj))
     return "this question"
+
+
+def _format_broad_intro(question: str) -> str:
+    q_lower = question.lower()
+    if "travel policy" in q_lower or "expense" in q_lower:
+        return "The travel policy provides the following information about employee expenses:"
+    m = re.search(r"\b(?:about|regarding|for)\s+([a-zA-Z\s]+?)(?:\?|$)", question, re.I)
+    if m:
+        phrase = re.sub(r"\s+", " ", m.group(1).strip())
+        return f"The retrieved documents provide the following information regarding {phrase}:"
+    return "The retrieved documents provide the following information:"
 
 
 def compose_extractive_answer(
@@ -162,7 +173,7 @@ def compose_extractive_answer(
                         used.append(best_p)
 
             if points:
-                intro = "The travel policy provides the following information about employee expenses:"
+                intro = _format_broad_intro(question)
                 parts.append(intro + " " + " ".join(points))
 
         if not parts:
@@ -200,8 +211,7 @@ def compose_extractive_answer(
             elif subj:
                 phrase = _extract_subject_phrase(question)
                 return (
-                    f"The available documents do not provide sufficient evidence regarding {phrase}. "
-                    "The indexed policies do not contain reimbursement terms or policies for this request.",
+                    f"The available documents do not provide sufficient evidence regarding {phrase}.",
                     [],
                 )
             else:
