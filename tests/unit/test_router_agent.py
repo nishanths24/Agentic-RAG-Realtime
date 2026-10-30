@@ -301,3 +301,73 @@ def test_orchestrator_meal_allowance_conversion_mocked(tmp_settings, fake_embedd
     assert "4200" in answer.answer
     assert any(step.name == "tool:currency_convert" and step.ok for step in answer.trace)
     assert not any("5000" in str(step.detail) and "INR" in str(step.detail) and "USD" in str(step.detail) for step in answer.trace)
+
+
+def test_broad_question_synthesizes_expense_rules_with_citations(tmp_settings, fake_embedder, store):
+    indexer = Indexer(tmp_settings, fake_embedder, store)
+    indexer.build(rebuild=True)
+    orch = Orchestrator(tmp_settings, Retriever(store, fake_embedder), ToolRegistry())
+
+    answer = orch.ask("What information does the travel policy provide about employee expenses?")
+
+    assert answer.sufficient_evidence
+    assert answer.document_evidence
+    assert "[D1]" in answer.answer
+    assert "Company Travel Policy (effective January 2024) [D1]" != answer.answer.strip()
+    assert "50 USD" in answer.answer or "meal allowance" in answer.answer.lower()
+    assert "rebook" in answer.answer.lower() or "weather" in answer.answer.lower()
+    assert any(d.label == "D1" for d in answer.document_evidence)
+
+
+def test_unsupported_question_private_jet_travel(tmp_settings, fake_embedder, store):
+    indexer = Indexer(tmp_settings, fake_embedder, store)
+    indexer.build(rebuild=True)
+    orch = Orchestrator(tmp_settings, Retriever(store, fake_embedder), ToolRegistry())
+
+    answer = orch.ask("What is the company's reimbursement policy for private jet travel?")
+
+    assert not answer.sufficient_evidence
+    assert "available documents do not provide sufficient evidence" in answer.answer.lower()
+    assert "private jet travel" in answer.answer.lower()
+    assert "Company Travel Policy (effective January 2024)" not in answer.answer
+    assert not any("prohibited" in answer.answer.lower() and "private jet" in answer.answer.lower() for _ in [1])
+    assert any("insufficient evidence" in c.lower() for c in answer.caveats)
+
+
+def test_citation_preservation_for_factual_claims():
+    p1 = RetrievedPassage(
+        chunk=Chunk(
+            chunk_id="doc1:0",
+            doc_id="doc1",
+            source_path="policy.txt",
+            chunk_index=0,
+            text="Hotel: The standard hotel reimbursement limit is 5000 INR per night.",
+            char_start=0,
+            char_end=68,
+        ),
+        score=0.8,
+        rank=1,
+    )
+    p2 = RetrievedPassage(
+        chunk=Chunk(
+            chunk_id="doc2:0",
+            doc_id="doc2",
+            source_path="guidelines.txt",
+            chunk_index=0,
+            text="Ground transport: taxis and ride-hailing are reimbursable to and from airports.",
+            char_start=0,
+            char_end=79,
+        ),
+        score=0.6,
+        rank=2,
+    )
+
+    ans_hotel, used_h = compose_extractive_answer("What is the hotel reimbursement limit?", [p1, p2], [])
+    assert "[D1]" in ans_hotel
+    assert "[D2]" not in ans_hotel
+    assert used_h == [p1]
+
+    ans_transport, used_t = compose_extractive_answer("Are airport taxis reimbursable?", [p1, p2], [])
+    assert "[D2]" in ans_transport
+    assert "[D1]" not in ans_transport
+    assert used_t == [p2]
