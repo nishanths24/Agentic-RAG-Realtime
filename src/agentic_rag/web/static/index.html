@@ -15,17 +15,8 @@
     <aside class="rail" id="sidebar" aria-label="Sidebar Navigation">
       <div class="rail-header">
         <div class="brand">
-          <div class="brand-icon" aria-hidden="true">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-              <circle cx="12" cy="12" r="9" stroke="url(#brand-grad)" stroke-width="2.5" />
-              <circle cx="12" cy="12" r="3.5" fill="url(#brand-grad)" />
-              <defs>
-                <linearGradient id="brand-grad" x1="4" y1="4" x2="20" y2="20" gradientUnits="userSpaceOnUse">
-                  <stop stop-color="#ea580c" />
-                  <stop offset="1" stop-color="#f97316" />
-                </linearGradient>
-              </defs>
-            </svg>
+          <div class="brand-icon">
+            <img src="/static/robot-logo.png" alt="Agentic RAG Logo" class="brand-robot-logo" />
           </div>
           <span class="brand-name">Agentic RAG</span>
         </div>
@@ -52,10 +43,17 @@
       <!-- Primary navigation action -->
       <div class="rail-actions">
         <button id="new-chat" class="nav-item-active" type="button">
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
           </svg>
           <span>Chat with AI</span>
+        </button>
+        <button id="sidebar-add-doc" class="nav-item-secondary" type="button" title="Add Document" aria-label="Add Document">
+          <svg class="plus-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+          <span>Add Document</span>
         </button>
       </div>
 
@@ -107,20 +105,21 @@
     <main class="stage" id="stage">
       <header class="topbar">
         <div class="topbar-left">
-          <button id="sidebar-toggle" class="icon-btn" aria-label="Toggle sidebar" type="button">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <button id="sidebar-toggle" class="icon-btn" aria-label="Collapse sidebar" title="Collapse sidebar" aria-expanded="true" type="button">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <line x1="3" y1="12" x2="21" y2="12"></line>
               <line x1="3" y1="6" x2="21" y2="6"></line>
               <line x1="3" y1="18" x2="21" y2="18"></line>
             </svg>
           </button>
-          <div class="topbar-brand">
+          <div class="topbar-brand" id="topbar-brand">
+            <img src="/static/robot-logo.png" alt="" aria-hidden="true" class="topbar-robot-logo" />
             <span class="topbar-name">Agentic RAG</span>
           </div>
         </div>
         <div class="topbar-right">
-          <button id="topbar-new-chat" class="topbar-new-chat-btn" type="button">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <button id="topbar-new-chat" class="topbar-new-chat-btn" type="button" title="Start a new chat" aria-label="New Chat">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <line x1="12" y1="5" x2="12" y2="19"></line>
               <line x1="5" y1="12" x2="19" y2="12"></line>
             </svg>
@@ -164,6 +163,142 @@
       </div>
     </main>
   </div>
+
+  <!-- Add Document Modal Dialog -->
+  <div class="modal-overlay" id="upload-modal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title-wrap">
+          <div class="modal-icon-badge" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="12" y1="18" x2="12" y2="12"></line>
+              <line x1="9" y1="15" x2="12" y2="12"></line>
+              <line x1="15" y1="15" x2="12" y2="12"></line>
+            </svg>
+          </div>
+          <div>
+            <h2 id="modal-title" class="modal-title">Add Document</h2>
+            <p class="modal-subtitle">Upload text or markdown documents to the knowledge base.</p>
+          </div>
+        </div>
+        <button id="modal-close-btn" class="icon-btn" type="button" aria-label="Close dialog">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+
+      <form id="upload-form" class="modal-body">
+        <input type="file" id="file-input" class="sr-only" accept=".txt,.md,text/plain,text/markdown" />
+
+        <!-- Drop / Select Zone -->
+        <div class="upload-dropzone" id="dropzone" tabindex="0" role="button" aria-label="Select document to upload">
+          <div class="dropzone-empty" id="dropzone-empty">
+            <div class="dropzone-icon" aria-hidden="true">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="17 8 12 3 7 8"></polyline>
+                <line x1="12" y1="3" x2="12" y2="15"></line>
+              </svg>
+            </div>
+            <div class="dropzone-text">
+              <span class="dropzone-cta">Click to browse</span> or drag and drop
+            </div>
+            <div class="dropzone-hint">Supported formats: <strong>.txt</strong>, <strong>.md</strong> (up to 1 MB)</div>
+          </div>
+
+          <!-- Selected File Card -->
+          <div class="selected-file-card" id="selected-file-card" style="display: none;">
+            <div class="selected-file-info">
+              <div class="file-badge" id="file-ext-badge">TXT</div>
+              <div class="file-details">
+                <div class="file-name" id="file-name-display">filename.txt</div>
+                <div class="file-size" id="file-size-display">0 KB</div>
+              </div>
+            </div>
+            <button type="button" id="remove-file-btn" class="icon-btn file-remove-btn" aria-label="Remove selected file" title="Remove file">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Overwrite option -->
+        <div class="modal-options" id="modal-options" style="display: none;">
+          <label class="checkbox-label" for="overwrite-checkbox">
+            <input type="checkbox" id="overwrite-checkbox" name="overwrite" />
+            <span>Overwrite if file already exists</span>
+          </label>
+        </div>
+
+        <!-- Status Message / Alert Container -->
+        <div id="upload-status" class="upload-status" style="display: none;" role="alert"></div>
+
+        <div class="modal-footer">
+          <button type="button" id="modal-cancel-btn" class="btn btn-secondary">Cancel</button>
+          <button type="submit" id="modal-submit-btn" class="btn btn-primary" disabled>
+            <span class="btn-text">Upload &amp; Index</span>
+            <span class="btn-spinner" style="display: none;">
+              <svg class="spinner" width="16" height="16" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" stroke-dasharray="32" stroke-linecap="round" />
+              </svg>
+              <span>Indexing...</span>
+            </span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Delete Document Confirmation Dialog Modal -->
+  <div class="modal-overlay" id="delete-modal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="delete-modal-title">
+    <div class="modal-card delete-modal-card">
+      <div class="modal-header">
+        <div class="modal-title-wrap">
+          <div class="delete-warning-icon" aria-hidden="true">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+              <line x1="10" y1="11" x2="10" y2="17"></line>
+              <line x1="14" y1="11" x2="14" y2="17"></line>
+            </svg>
+          </div>
+          <h2 class="modal-title" id="delete-modal-title">Delete Document?</h2>
+        </div>
+        <button type="button" class="icon-btn modal-close" id="delete-modal-close-btn" aria-label="Close dialog">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+
+      <div class="delete-modal-body">
+        <p class="delete-modal-prompt">Are you sure you want to delete <strong id="delete-doc-name">document.txt</strong>?</p>
+        <p class="delete-modal-warning">This will permanently remove the document and its indexed content.</p>
+        <div class="upload-status" id="delete-status" style="display: none;" role="alert"></div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="delete-cancel-btn">Cancel</button>
+        <button type="button" class="btn btn-danger" id="delete-confirm-btn">
+          <span class="btn-text">Delete Document</span>
+          <span class="btn-spinner" style="display: none;">
+            <svg class="spinner" width="14" height="14" viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" stroke-dasharray="32" stroke-linecap="round" />
+            </svg>
+            <span>Deleting…</span>
+          </span>
+        </button>
+      </div>
+    </div>
+  </div>
+
   <script src="/static/app.js"></script>
 </body>
 </html>
