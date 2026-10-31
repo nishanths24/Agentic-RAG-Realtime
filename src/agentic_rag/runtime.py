@@ -35,6 +35,8 @@ def build_orchestrator(settings: Settings | None = None) -> tuple[Orchestrator, 
     if store.count() == 0:
         indexer.build(rebuild=True)
         store.load()
+    else:
+        indexer.build(rebuild=False)
     retriever = Retriever(store, embedder)
     generator = AnswerGenerator()
     if settings.llm_provider not in {"", "none"} and settings.llm_api_key:

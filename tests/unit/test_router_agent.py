@@ -455,3 +455,48 @@ def test_unsupported_question_does_not_invent_prohibition_or_reimbursement(tmp_s
     assert "allowed" not in answer.answer.lower()
     assert "reimbursable" not in answer.answer.lower()
     assert any("insufficient evidence" in c.lower() for c in answer.caveats)
+
+
+def test_scope_disclaimer_does_not_ground_unsupported_private_jet_query(tmp_settings, fake_embedder, store):
+    falcon_file = tmp_settings.documents_dir / "project_falcon_brief.txt"
+    falcon_file.write_text(
+        "Project Falcon — Internal Project Brief\n\n"
+        "Internal Project Code\n"
+        "The internal code for Project Falcon is ORCHID-742.\n\n"
+        "Scheduled Review\n"
+        "The next scheduled review date for Project Falcon is 18 September 2027.\n\n"
+        "Project Owner\n"
+        "The Operations Enablement Team coordinates the project review and collects updates from participating teams.\n\n"
+        "Document Scope\n"
+        "This brief describes only the details listed above. It does not define budgets, travel reimbursement rules, private-jet travel, or other policies.\n",
+        encoding="utf-8",
+    )
+    indexer = Indexer(tmp_settings, fake_embedder, store)
+    indexer.build(rebuild=True)
+    orch = Orchestrator(tmp_settings, Retriever(store, fake_embedder), ToolRegistry())
+
+    # Unsupported query mentioning words from disclaimer
+    answer_pj = orch.ask("What is the reimbursement policy for private jet travel?")
+    assert not answer_pj.sufficient_evidence
+    assert answer_pj.document_evidence == []
+    assert "available documents do not provide sufficient evidence" in answer_pj.answer.lower()
+    assert any("insufficient evidence" in c.lower() for c in answer_pj.caveats)
+
+    # Supported queries for Falcon must work and be grounded
+    answer_team = orch.ask("Which team coordinates Project Falcon?")
+    assert answer_team.sufficient_evidence
+    assert "Operations Enablement Team" in answer_team.answer
+    assert any(c.reference == "project_falcon_brief.txt" for c in answer_team.document_evidence)
+
+    answer_code = orch.ask("What is the internal code for Project Falcon?")
+    assert answer_code.sufficient_evidence
+    assert "ORCHID-742" in answer_code.answer
+
+    answer_review = orch.ask("When is the next scheduled review for Project Falcon?")
+    assert answer_review.sufficient_evidence
+    assert "18 September 2027" in answer_review.answer
+
+    # Existing policy question continues to work
+    answer_hotel = orch.ask("What is the hotel reimbursement limit?")
+    assert answer_hotel.sufficient_evidence
+    assert "5000 INR" in answer_hotel.answer

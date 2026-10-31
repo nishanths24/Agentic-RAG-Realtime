@@ -13,7 +13,7 @@ def document_citations(passages: list[RetrievedPassage]) -> list[Citation]:
         citations.append(
             Citation(
                 kind="document",
-                reference=passage.chunk.chunk_id,
+                reference=passage.chunk.source_path,
                 label=f"D{passage.rank}",
                 preview=passage.chunk.text[:240],
             )

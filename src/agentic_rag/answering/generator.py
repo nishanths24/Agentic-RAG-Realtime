@@ -37,6 +37,13 @@ _META_DISCLAIMER = re.compile(
     re.I,
 )
 
+_SCOPE_DISCLAIMER = re.compile(
+    r"\b(?:does not|do not|will not|cannot)\s+(?:define|cover|contain|provide|specify|establish|include|address|describe)\b|"
+    r"\b(?:out of scope|not covered|not defined|not specified|not addressed|no policy is established)\b|"
+    r"\bdescribes only the details listed above\b",
+    re.I,
+)
+
 
 def _stem(word: str) -> str:
     w = word.lower()
@@ -82,14 +89,20 @@ def _split_units(text: str) -> list[str]:
 
 def _is_informative_sentence(text: str) -> bool:
     clean = text.strip()
+    if not clean:
+        return False
     if clean.startswith("#"):
+        return False
+    if not (clean[0].isupper() or clean[0].isdigit() or clean[0] in ('"', "'", "“", "”", "(", "[")):
         return False
     if _TITLE_OR_HEADING.match(clean):
         return False
     if _META_DISCLAIMER.search(clean):
         return False
+    if _SCOPE_DISCLAIMER.search(clean):
+        return False
     if len(clean) < 60 and not clean.endswith((".", "!", "?", ":")):
-        if re.search(r"\b(policy|guidelines?|playbook|handbook|memo)\b", clean, re.I):
+        if re.search(r"\b(policy|guidelines?|playbook|handbook|memo|scope)\b", clean, re.I):
             return False
     return len(clean) >= 20
 

@@ -68,6 +68,17 @@ class Indexer:
             "failed": len(report.failed),
         }
 
+    def remove_document(self, source_path: str) -> int:
+        removed = self.store.delete_by_source(source_path)
+        self.store.persist()
+        logger.info(
+            "Removed document %s (%s chunks removed, %s remaining)",
+            source_path,
+            removed,
+            self.store.count(),
+        )
+        return removed
+
 
 def default_stack(settings: Settings) -> tuple[HashingEmbeddingProvider, NumpyVectorStore, Indexer]:
     embedder = HashingEmbeddingProvider(

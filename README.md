@@ -4,7 +4,7 @@
 
 [![Python Version](https://img.shields.io/badge/Python-3.11%20%7C%203.12-blue.svg?logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
-[![Tests](https://img.shields.io/badge/Tests-58%20Passed-brightgreen.svg)](https://pytest.org/)
+[![Tests](https://img.shields.io/badge/Tests-70%20Passed-brightgreen.svg)](https://pytest.org/)
 [![Architecture](https://img.shields.io/badge/Architecture-Agentic%20Hybrid%20RAG-orange.svg)](#system-architecture)
 [![License](https://img.shields.io/badge/License-Unspecified%20%2F%20All%20Rights%20Reserved-lightgrey.svg)](#license-and-acknowledgements)
 
@@ -982,7 +982,50 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8000/ask" -Method Post -Body $body -Con
 
 ---
 
-### 4. `POST /index`
+### 4. `POST /documents/upload`
+Uploads a new plain text (`.txt`) or Markdown (`.md`) document to the configured document directory and incrementally indexes it into the vector store.
+
+**Headers:**
+- `Content-Type: multipart/form-data`
+- `x-api-key`: string (optional, required if `API_KEY` is configured)
+
+**Form Fields:**
+- `file`: Document file (`.txt` or `.md`, up to 1 MB)
+- `overwrite`: `boolean` (optional, default: `false`)
+
+**PowerShell Request:**
+```powershell
+$filePath = "C:\path\to\remote_work_policy.txt"
+$form = @{
+    file = Get-Item $filePath
+    overwrite = "false"
+}
+Invoke-RestMethod -Uri "http://127.0.0.1:8000/documents/upload" -Method Post -Form $form
+```
+
+**Response (200 OK):**
+```json
+{
+  "status": "ok",
+  "message": "Successfully uploaded and indexed 'remote_work_policy.txt'.",
+  "filename": "remote_work_policy.txt",
+  "size_bytes": 118,
+  "extension": ".txt",
+  "chunks_total": 6,
+  "index_report": {
+    "documents": 6,
+    "changed": 1,
+    "removed": 0,
+    "chunks": 6,
+    "skipped": 0,
+    "failed": 0
+  }
+}
+```
+
+---
+
+### 5. `POST /index`
 Triggers an incremental or full rebuild of the vector index.
 
 **Query Parameters:**
@@ -1060,21 +1103,27 @@ platform win32 -- Python 3.12.10, pytest-9.1.1, pluggy-1.6.0
 rootdir: C:\Users\nisha\OneDrive\Desktop\Agentic RAG Realtime
 configfile: pyproject.toml
 testpaths: tests
-collected 58 items
+collected 69 items
 
-tests\test_ingestion.py ......                                           [ 10%]
-tests\unit\test_api_config.py ...                                        [ 15%]
-tests\unit\test_chunking.py .........                                    [ 31%]
-tests\unit\test_embeddings_store.py ....                                 [ 37%]
-tests\unit\test_loaders.py ......                                        [ 48%]
-tests\unit\test_retrieval.py ..                                          [ 51%]
-tests\unit\test_router_agent.py ....................                     [ 86%]
+tests\test_ingestion.py ......                                           [  8%]
+tests\unit\test_api_config.py ...                                        [ 13%]
+tests\unit\test_chunking.py .........                                    [ 26%]
+tests\unit\test_document_upload.py ...........                           [ 42%]
+tests\unit\test_embeddings_store.py ....                                 [ 47%]
+tests\unit\test_loaders.py ......                                        [ 56%]
+tests\unit\test_retrieval.py ..                                          [ 59%]
+tests\unit\test_router_agent.py ....................                     [ 88%]
 tests\unit\test_tools.py ........                                        [100%]
 
-============================= 58 passed in 1.16s ==============================
+============================= 70 passed in 1.59s ==============================
 ```
 
 ### Running Specific Test Suites
+
+- **Document Upload & Ingestion Validation:**
+  ```powershell
+  python -m pytest tests/unit/test_document_upload.py -v
+  ```
 
 - **Agent Routing & Grounded Synthesis:**
   ```powershell

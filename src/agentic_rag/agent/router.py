@@ -83,10 +83,10 @@ class RuleRouter:
             use_docs = True
 
         if not use_docs and not tools:
-            # Ambiguous policy-like wording still might need docs; otherwise abstain.
+            # Questions not matching live tools should search documents unless explicitly abstaining on trivia
             if any(word in q.lower() for word in ("who won", "world cup", "secret", "password")):
                 use_docs = False
-            elif len(q.split()) >= 6:
+            elif len(q.split()) >= 2:
                 use_docs = True
 
         reasoning = _reason(use_docs, tools)
