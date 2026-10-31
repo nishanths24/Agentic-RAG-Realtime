@@ -162,3 +162,162 @@ def test_registry_rejects_unknown():
     registry = ToolRegistry()
     with pytest.raises(Exception):
         registry.get("explode")
+
+
+def test_knowledge_tool_wikipedia_and_various_phrasings():
+    from agentic_rag.tools.knowledge import KnowledgeTool
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        url_str = str(request.url)
+        if "summary/Mysore" in url_str or "summary/Mysuru" in url_str:
+            return httpx.Response(
+                200,
+                json={
+                    "extract": "Mysore, officially Mysuru, is a city in the southern Indian state of Karnataka.",
+                    "content_urls": {"desktop": {"page": "https://en.wikipedia.org/wiki/Mysore"}},
+                },
+            )
+        if "summary/Chennai" in url_str:
+            return httpx.Response(
+                200,
+                json={
+                    "extract": "Chennai is the capital and largest city of Tamil Nadu, India.",
+                    "content_urls": {"desktop": {"page": "https://en.wikipedia.org/wiki/Chennai"}},
+                },
+            )
+        if "summary/Hyderabad" in url_str:
+            return httpx.Response(
+                200,
+                json={
+                    "extract": "Hyderabad is the capital and largest city of the Indian state of Telangana.",
+                    "content_urls": {"desktop": {"page": "https://en.wikipedia.org/wiki/Hyderabad"}},
+                },
+            )
+        if "summary/Bengaluru" in url_str:
+            return httpx.Response(
+                200,
+                json={
+                    "extract": "Bengaluru is the capital of the Indian state of Karnataka.",
+                    "content_urls": {"desktop": {"page": "https://en.wikipedia.org/wiki/Bengaluru"}},
+                },
+            )
+        if "summary/Kyoto" in url_str:
+            return httpx.Response(
+                200,
+                json={
+                    "extract": "Kyoto is the capital city of Kyoto Prefecture in Japan.",
+                    "content_urls": {"desktop": {"page": "https://en.wikipedia.org/wiki/Kyoto"}},
+                },
+            )
+        return httpx.Response(404, json={"detail": "Not found"})
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    tool = KnowledgeTool(client=client)
+
+    # 1. Mysore / Mysuru
+    r1 = tool.run({"query": "where Mysore is located"})
+    assert r1.ok
+    assert "Karnataka" in r1.data["answer"]
+    assert "https://en.wikipedia.org/wiki/Mysore" in r1.data["answer"]
+
+    r2 = tool.run({"query": "Where is Mysuru situated?"})
+    assert r2.ok
+    assert "Karnataka" in r2.data["answer"]
+
+    # 2. Chennai
+    r3 = tool.run({"query": "Which state is Chennai in?"})
+    assert r3.ok
+    assert "Tamil Nadu" in r3.data["answer"]
+
+    # 3. Hyderabad
+    r4 = tool.run({"query": "Tell me about Hyderabad's location."})
+    assert r4.ok
+    assert "Telangana" in r4.data["answer"]
+
+    # 4. Bengaluru
+    r5 = tool.run({"query": "Where is Bengaluru located?"})
+    assert r5.ok
+    assert "Karnataka" in r5.data["answer"]
+
+    # 5. Unseen city (Kyoto)
+    r6 = tool.run({"query": "Where is Kyoto located?"})
+    assert r6.ok
+    assert "Japan" in r6.data["answer"]
+
+
+def test_knowledge_tool_web_search_api():
+    from agentic_rag.tools.knowledge import KnowledgeTool
+    import json
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content.decode("utf-8"))
+        assert body["api_key"] == "tvly-test-key"
+        assert body["query"] == "Where is Mysore located?"
+        return httpx.Response(
+            200,
+            json={
+                "answer": "Mysore is a city located in Karnataka, India.",
+                "results": [{"url": "https://example.com/mysore", "content": "Mysore is in Karnataka."}],
+            },
+        )
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    tool = KnowledgeTool(
+        search_api_key="tvly-test-key",
+        search_provider="tavily",
+        client=client,
+    )
+    result = tool.run({"query": "Where is Mysore located?"})
+    assert result.ok
+    assert "Karnataka" in result.data["answer"]
+    assert "https://example.com/mysore" in result.data["answer"]
+
+
+def test_knowledge_tool_geocoding_fallback():
+    from agentic_rag.tools.knowledge import KnowledgeTool
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        url_str = str(request.url)
+        if "summary" in url_str:
+            return httpx.Response(404, json={"detail": "Not found"})
+        if "geocoding" in url_str:
+            return httpx.Response(
+                200,
+                json={"results": [{"name": "Pune", "admin1": "Maharashtra", "country": "India"}]},
+            )
+        return httpx.Response(404)
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    tool = KnowledgeTool(client=client)
+    res = tool.run({"query": "where is Pune located"})
+    assert res.ok
+    assert "Maharashtra" in res.data["answer"]
+    assert "India" in res.data["answer"]
+
+
+def test_knowledge_tool_error_handling():
+    from agentic_rag.tools.knowledge import KnowledgeTool
+
+    # 1. Empty query
+    with pytest.raises(ToolValidationError):
+        KnowledgeTool().validate({"query": ""})
+
+    # 2. Unavailable
+    with pytest.raises(ToolUnavailableError, match="unavailable"):
+        KnowledgeTool(available=False).run({"query": "Where is Paris?"})
+
+    # 3. Network timeout
+    def timeout_handler(req: httpx.Request):
+        raise httpx.ReadTimeout("Timed out")
+
+    client_timeout = httpx.Client(transport=httpx.MockTransport(timeout_handler))
+    with pytest.raises(ToolTimeoutError):
+        KnowledgeTool(client=client_timeout).run({"query": "Where is Paris?"})
+
+    # 4. Search API 401 Auth error
+    def auth_err_handler(req: httpx.Request):
+        return httpx.Response(401, json={"detail": "Unauthorized"})
+
+    client_auth = httpx.Client(transport=httpx.MockTransport(auth_err_handler))
+    with pytest.raises(ToolUnavailableError, match="authentication failed"):
+        KnowledgeTool(search_api_key="bad-key", search_provider="tavily", client=client_auth).run({"query": "Where is Paris?"})

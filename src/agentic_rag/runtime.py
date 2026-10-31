@@ -9,7 +9,7 @@ from agentic_rag.indexing import default_stack
 from agentic_rag.llm.openai_compat import OpenAICompatClient
 from agentic_rag.logging_setup import setup_logging
 from agentic_rag.retrieval.retriever import Retriever
-from agentic_rag.tools.registry import ToolRegistry
+from agentic_rag.tools.registry import ToolRegistry, default_tools
 
 
 @lru_cache(maxsize=1)
@@ -47,5 +47,5 @@ def build_orchestrator(settings: Settings | None = None) -> tuple[Orchestrator, 
                 model=settings.llm_model,
             )
         )
-    orchestrator = Orchestrator(settings, retriever, ToolRegistry(), generator=generator)
+    orchestrator = Orchestrator(settings, retriever, ToolRegistry(default_tools(settings)), generator=generator)
     return orchestrator, indexer, store

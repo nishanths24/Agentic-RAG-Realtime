@@ -12,9 +12,9 @@ _CONVERT_INTENT = re.compile(
     r"\b(convert|converted|conversion|exchange|equivalent|what's that in|what is that in|how much is .* in)\b",
     re.I,
 )
-_CALC = re.compile(r"\b(calculate|compute)\b|\d+\s*[\+\-\*/]\s*\d+", re.I)
+_CALC = re.compile(r"\b(calculate|compute|solve|math|evaluate)\b|\d+\s*[\+\-\*/\^×xX÷]\s*\d+", re.I)
 _DOCS = re.compile(
-    r"\b(policy|reimburs|hotel|meal|allowance|receipt|rebook|travel|guideline|handbook|document|limit|per night|per day)\b",
+    r"\b(policy|reimburs|hotel|meal|allowance|receipt|rebook|travel|guideline|handbook|document|documents|limit|per night|per day|project|brief|summary|summarize|overview|topic|server|confidential|company|corporate|internal|employee|expenses?|ceo|vp|hr|salary)\b",
     re.I,
 )
 _LIVE = re.compile(r"\b(today|right now|current|now|live|latest)\b", re.I)
@@ -35,6 +35,29 @@ _TZ_MAP = {
     "sydney": "Australia/Sydney",
 }
 _ISO = re.compile(r"\b([A-Z]{3})\b")
+
+_GENERAL_KNOWLEDGE_PATTERNS = [
+    re.compile(r"\bwhere\s+(?:\b(?:is|are)\b\s+)?([a-zA-Z\s'-]+?)(?:\s+\b(?:is|are)\b)?(?:\s+\b(?:located|situated)\b)?\??$", re.I),
+    re.compile(r"\b(?:which|what)\s+(?:state|country|nation|continent|region|province)\s+(?:\b(?:is|are)\b\s+)?([a-zA-Z\s'-]+?)(?:\s+\b(?:is|are)\b)?(?:\s+\b(?:in|located\s+in|part\s+of)\b)?\??$", re.I),
+    re.compile(r"\b(?:what\s+is\s+the\s+capital\s+of|capital\s+city\s+of)\s+([a-zA-Z\s'-]+?)\??$", re.I),
+    re.compile(r"\b(?:tell\s+me\s+about|information\s+about)\s+([a-zA-Z\s'-]+?)(?:'s\s+location|\s+location)?\??$", re.I),
+]
+
+
+def _extract_knowledge_query(question: str) -> str | None:
+    q = question.strip().rstrip("?.!")
+    if _DOCS.search(q) or _TIME.search(q) or _WEATHER.search(q) or _CURRENCY.search(q) or _CALC.search(q):
+        return None
+    if re.search(r"\b(confidential|secret|password|server|internal|company|corporate|ceo|employee|salary)\b", q, re.I):
+        return None
+    for pattern in _GENERAL_KNOWLEDGE_PATTERNS:
+        match = pattern.search(q)
+        if match:
+            place = match.group(1).strip()
+            words = [w.lower() for w in re.findall(r"[a-zA-Z]+", place)]
+            if 1 <= len(words) <= 4 and not any(w in {"policy", "reimbursement", "project", "code", "document", "hotel", "meal"} for w in words):
+                return question.strip()
+    return None
 
 
 def _has_conversion_intent(question: str) -> bool:
@@ -74,10 +97,18 @@ class RuleRouter:
                         {"amount": amount or 50, "from_currency": src, "to_currency": dst},
                     )
                 )
-        if _CALC.search(q) and not tools:
+        if _CALC.search(q) and not any(t.tool_name == "calculator" for t in tools):
             expr = _extract_expression(q)
             if expr:
                 tools.append(ToolRequest("calculator", {"expression": expr}))
+                if not re.search(r"\b(policy|reimburs|hotel|meal|allowance|travel|receipt)\b", q, re.I):
+                    use_docs = False
+
+        if not tools and not use_docs:
+            gk_q = _extract_knowledge_query(q)
+            if gk_q:
+                tools.append(ToolRequest("knowledge", {"query": q}))
+                use_docs = False
 
         if _LIVE.search(q) and not use_docs and not tools:
             use_docs = True
@@ -284,8 +315,17 @@ def _extract_amount(question: str) -> float | int | None:
 
 
 def _extract_expression(question: str) -> str | None:
-    match = re.search(r"(\d+(?:\.\d+)?\s*[\+\-\*/]\s*\d+(?:\.\d+)?(?:\s*[\+\-\*/]\s*\d+(?:\.\d+)?)*)", question)
-    return match.group(1).strip() if match else None
+    normalized = question.replace("×", "*").replace("÷", "/")
+    normalized = re.sub(r"(\d+(?:\.\d+)?)\s*[xX]\s*(\d+(?:\.\d+)?)", r"\1 * \2", normalized)
+    match = re.search(
+        r"(\d+(?:\.\d+)?\s*(?:[\+\-\*/\^%]|(?:\*\*))\s*\d+(?:\.\d+)?(?:\s*(?:[\+\-\*/\^%]|(?:\*\*))\s*\d+(?:\.\d+)?)*)",
+        normalized,
+    )
+    if match:
+        expr = match.group(1).strip()
+        if re.search(r"[\+\-\*/\^%]", expr):
+            return expr
+    return None
 
 
 def _reason(use_docs: bool, tools: list[ToolRequest]) -> str:
@@ -293,6 +333,8 @@ def _reason(use_docs: bool, tools: list[ToolRequest]) -> str:
     if use_docs and names:
         return f"Mixed intent: retrieve documents and call {', '.join(names)}."
     if names:
+        if "knowledge" in names:
+            return "General knowledge question: route to knowledge provider."
         return f"Live question: call {', '.join(names)}."
     if use_docs:
         return "Policy/document question: retrieve local sources only."

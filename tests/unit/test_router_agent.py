@@ -500,3 +500,360 @@ def test_scope_disclaimer_does_not_ground_unsupported_private_jet_query(tmp_sett
     answer_hotel = orch.ask("What is the hotel reimbursement limit?")
     assert answer_hotel.sufficient_evidence
     assert "5000 INR" in answer_hotel.answer
+
+
+def test_calculator_routing_and_arithmetic(tmp_settings, fake_embedder, store):
+    router = RuleRouter()
+    for expr_q in ["Calculate 125 × 48", "Calculate 125 x 48", "Calculate 125 X 48", "144 ÷ 12"]:
+        r = router.route(expr_q)
+        assert not r.use_documents
+        assert any(t.tool_name == "calculator" for t in r.tools)
+
+    orch = Orchestrator(tmp_settings, Retriever(store, fake_embedder), ToolRegistry())
+    ans1 = orch.ask("Calculate 125 × 48")
+    assert ans1.sufficient_evidence
+    assert "6000" in ans1.answer
+    assert any(c.label == "T1" for c in ans1.live_evidence)
+    assert ans1.document_evidence == []
+
+    ans1_ascii = orch.ask("Calculate 125 x 48")
+    assert ans1_ascii.sufficient_evidence
+    assert "6000" in ans1_ascii.answer
+
+    ans_div = orch.ask("144 ÷ 12")
+    assert ans_div.sufficient_evidence
+    assert "12" in ans_div.answer
+
+    ans2 = orch.ask("Compute 500 / 25")
+    assert ans2.sufficient_evidence
+    assert "20" in ans2.answer
+
+    ans3 = orch.ask("What is 42 * 10?")
+    assert ans3.sufficient_evidence
+    assert "420" in ans3.answer
+
+
+def test_project_falcon_summarization_and_key_info(tmp_settings, fake_embedder, store):
+    falcon_file = tmp_settings.documents_dir / "project_falcon_brief.txt"
+    falcon_file.write_text(
+        "Project Falcon — Internal Project Brief\n\n"
+        "Project Overview\n"
+        "Project Falcon is an internal initiative to improve how the operations team tracks project milestones, reviews, and cross-team responsibilities. The team maintains a shared project brief so employees can find key details using the Agentic RAG document assistant.\n\n"
+        "Internal Project Code\n"
+        "The internal code for Project Falcon is ORCHID-742.\n\n"
+        "Scheduled Review\n"
+        "The next scheduled review date for Project Falcon is 18 September 2027.\n\n"
+        "Project Owner\n"
+        "The Operations Enablement Team coordinates the project review and collects updates from participating teams.\n\n"
+        "Document Scope\n"
+        "This brief describes only the details listed above. It does not define budgets, travel reimbursement rules, private-jet travel, or other policies.\n",
+        encoding="utf-8",
+    )
+    indexer = Indexer(tmp_settings, fake_embedder, store)
+    indexer.build(rebuild=True)
+    orch = Orchestrator(tmp_settings, Retriever(store, fake_embedder), ToolRegistry())
+
+    # 1. Project brief summarization
+    summary_ans = orch.ask("Summarize the Project Falcon brief")
+    assert summary_ans.sufficient_evidence
+    assert "Project Falcon" in summary_ans.answer
+    assert "ORCHID-742" in summary_ans.answer
+    assert "18 September 2027" in summary_ans.answer
+    assert "Operations Enablement Team" in summary_ans.answer
+    assert "coordinates" in summary_ans.answer
+    assert "[D" in summary_ans.answer
+    assert "private-jet" not in summary_ans.answer.lower()
+    assert "budget" not in summary_ans.answer.lower()
+    assert any(c.reference == "project_falcon_brief.txt" for c in summary_ans.document_evidence)
+
+    # 2. Main topic question
+    topic_ans = orch.ask("What is the main topic of the uploaded documents?")
+    assert topic_ans.sufficient_evidence
+    assert "Project Falcon" in topic_ans.answer or "hotel" in topic_ans.answer
+    assert any(c.reference in ("project_falcon_brief.txt", "travel_policy.txt") for c in topic_ans.document_evidence)
+
+    # 3. Key information question
+    key_ans = orch.ask("What key information does the uploaded document contain?")
+    assert key_ans.sufficient_evidence
+    assert any(k in key_ans.answer for k in ("ORCHID-742", "18 September 2027", "Project Falcon", "5000 INR"))
+    assert len(key_ans.document_evidence) >= 1
+
+    # 4. Specific fact queries
+    code_ans = orch.ask("What is the project code name?")
+    assert code_ans.sufficient_evidence
+    assert "ORCHID-742" in code_ans.answer
+
+    code_ans2 = orch.ask("What is the project code name of Project Falcon?")
+    assert code_ans2.sufficient_evidence
+    assert "ORCHID-742" in code_ans2.answer
+
+    date_ans = orch.ask("What is the review date mentioned in the document?")
+    assert date_ans.sufficient_evidence
+    assert "18 September 2027" in date_ans.answer
+
+    overview_ans = orch.ask("Give me an overview of the indexed documents.")
+    assert overview_ans.sufficient_evidence
+    assert len(overview_ans.document_evidence) >= 1
+
+
+def test_project_orion_entity_mismatch_abstention(tmp_settings, fake_embedder, store):
+    falcon_file = tmp_settings.documents_dir / "project_falcon_brief.txt"
+    falcon_file.write_text(
+        "Project Falcon — Internal Project Brief\n\n"
+        "Internal Project Code\n"
+        "The internal code for Project Falcon is ORCHID-742.\n\n"
+        "Scheduled Review\n"
+        "The next scheduled review date for Project Falcon is 18 September 2027.\n",
+        encoding="utf-8",
+    )
+    indexer = Indexer(tmp_settings, fake_embedder, store)
+    indexer.build(rebuild=True)
+    orch = Orchestrator(tmp_settings, Retriever(store, fake_embedder), ToolRegistry())
+
+    # Variations in capitalization, word order, and attribute mentions
+    orion_variations = [
+        "What is the project code name of Project Orion?",
+        "What is Project Orion's code name?",
+        "What is the Orion project code?",
+        "Code name for project orion",
+        "PROJECT ORION review date",
+        "What is the review date of Project Orion?",
+    ]
+    for q in orion_variations:
+        ans = orch.ask(q)
+        assert not ans.sufficient_evidence, f"Expected insufficient evidence for: {q}"
+        assert ans.document_evidence == [], f"Expected empty evidence for: {q}"
+        assert "ORCHID-742" not in ans.answer, f"Should not contain Falcon code for: {q}"
+        assert "18 September 2027" not in ans.answer, f"Should not contain Falcon date for: {q}"
+        assert "couldn't find enough relevant information" in ans.answer.lower()
+        assert "contain key upload" not in ans.answer.lower()
+
+
+def test_unanswerable_malformed_query_fallback(tmp_settings, fake_embedder, store):
+    orch = Orchestrator(tmp_settings, Retriever(store, fake_embedder), ToolRegistry())
+    expected_concise = "I couldn't find enough relevant information in the available documents to answer that question."
+    for unans in ["What is the CEO personal phone number?", "What is the CEO's personal phone number?"]:
+        ans = orch.ask(unans)
+        assert not ans.sufficient_evidence
+        assert ans.document_evidence == []
+        assert ans.answer == expected_concise
+        # Ensure no duplicate generic sentence is appended
+        assert "The available documents do not provide sufficient evidence to answer this question." not in ans.answer
+        # Check that malformed token soup is never produced
+        assert "regarding ceo number personal phone" not in ans.answer.lower()
+        assert "regarding contain key upload" not in ans.answer.lower()
+
+
+def test_document_preview_vs_indexed_storage(tmp_path: Path, fake_embedder):
+    docs = tmp_path / "documents"
+    docs.mkdir()
+    falcon_file = docs / "project_falcon_brief.txt"
+    full_content = (
+        "Project Falcon — Internal Project Brief\n\n"
+        "Project Overview\n"
+        "Project Falcon is an internal initiative to improve how the operations team tracks project milestones, reviews, and cross-team responsibilities. "
+        "The team maintains a shared project brief so employees can find key details using the Agentic RAG document assistant.\n\n"
+        "Internal Project Code\n"
+        "The internal code for Project Falcon is ORCHID-742.\n\n"
+        "Scheduled Review\n"
+        "The next scheduled review date for Project Falcon is 18 September 2027.\n\n"
+        "Project Owner\n"
+        "The Operations Enablement Team coordinates the project review and collects updates from participating teams.\n\n"
+        "Status Update\n"
+        "The project is in the planning and coordination phase. Teams should confirm their milestone updates before the scheduled review.\n\n"
+        "Document Scope\n"
+        "This brief describes only the details listed above. It does not define budgets, travel reimbursement rules, private-jet travel, or other policies.\n"
+    )
+    falcon_file.write_text(full_content, encoding="utf-8")
+
+    from agentic_rag.config import Settings
+    from agentic_rag.vectorstore.numpy_store import NumpyVectorStore
+    std_settings = Settings(
+        project_root=tmp_path,
+        documents_dir=docs,
+        index_dir=tmp_path / "index",
+        log_dir=tmp_path / "logs",
+        chunk_size=1000,
+        chunk_overlap=150,
+        top_k=4,
+        min_score=0.08,
+        log_level="INFO",
+        request_timeout_s=15.0,
+        max_agent_steps=4,
+        max_file_bytes=1048576,
+        max_question_chars=2000,
+        embedding_provider="hashing",
+        embedding_model="fake-hash-v1",
+        embedding_dimension=64,
+        llm_provider="none",
+        llm_model="gpt-4o-mini",
+        llm_api_key="",
+        llm_base_url="",
+        search_api_key="",
+        api_key="",
+        host="127.0.0.1",
+        port=8000,
+    )
+    std_store = NumpyVectorStore(
+        tmp_path / "index",
+        model_name=fake_embedder.model_name,
+        dimension=fake_embedder.dimension,
+        chunk_size=1000,
+        chunk_overlap=150,
+    )
+    indexer = Indexer(std_settings, fake_embedder, std_store)
+    indexer.build(rebuild=True)
+
+    # 1. Verify storage contains full text and char_end matches total length
+    stored_passages = std_store.search(fake_embedder.embed_query("Project Falcon"), top_k=5)
+    assert len(stored_passages) >= 1
+    chunk = stored_passages[0].chunk
+    assert len(chunk.text) == len(full_content.strip())
+    assert "Document Scope" in chunk.text
+    assert "Status Update" in chunk.text
+    assert "Project Owner" in chunk.text
+
+    # 2. Verify citation preview is shortened excerpt (length <= 240)
+    orch = Orchestrator(std_settings, Retriever(std_store, fake_embedder), ToolRegistry())
+    ans = orch.ask("What is the project code name?")
+    assert ans.document_evidence
+    preview = ans.document_evidence[0].preview
+    assert len(preview) <= 240
+    assert preview == chunk.text[:240]
+    assert preview.endswith("project b")
+
+
+def test_general_knowledge_routing_and_answers(tmp_settings, fake_embedder, store):
+    import httpx
+    from agentic_rag.tools.knowledge import KnowledgeTool
+    from agentic_rag.tools.calculator import CalculatorTool
+    from agentic_rag.tools.currency import CurrencyConvertTool
+    from agentic_rag.tools.current_time import CurrentTimeTool
+    from agentic_rag.tools.weather import WeatherTool
+
+    def mock_handler(request: httpx.Request) -> httpx.Response:
+        url_str = str(request.url)
+        if "summary/Mysore" in url_str or "summary/Mysuru" in url_str:
+            return httpx.Response(200, json={
+                "extract": "Mysore, officially Mysuru, is a city in the southern Indian state of Karnataka.",
+                "content_urls": {"desktop": {"page": "https://en.wikipedia.org/wiki/Mysore"}},
+            })
+        if "summary/Chennai" in url_str:
+            return httpx.Response(200, json={
+                "extract": "Chennai is the capital and largest city of Tamil Nadu, the southernmost state of India.",
+                "content_urls": {"desktop": {"page": "https://en.wikipedia.org/wiki/Chennai"}},
+            })
+        if "summary/Hyderabad" in url_str:
+            return httpx.Response(200, json={
+                "extract": "Hyderabad is the capital and largest city of the Indian state of Telangana.",
+                "content_urls": {"desktop": {"page": "https://en.wikipedia.org/wiki/Hyderabad"}},
+            })
+        if "summary/Bengaluru" in url_str:
+            return httpx.Response(200, json={
+                "extract": "Bengaluru is the capital and largest city of the southern Indian state of Karnataka.",
+                "content_urls": {"desktop": {"page": "https://en.wikipedia.org/wiki/Bengaluru"}},
+            })
+        if "summary/Kyoto" in url_str:
+            return httpx.Response(200, json={
+                "extract": "Kyoto is the capital city of Kyoto Prefecture in Japan.",
+                "content_urls": {"desktop": {"page": "https://en.wikipedia.org/wiki/Kyoto"}},
+            })
+        return httpx.Response(404, json={"detail": "Not found"})
+
+    mock_client = httpx.Client(transport=httpx.MockTransport(mock_handler))
+    mock_knowledge = KnowledgeTool(client=mock_client)
+    mock_registry = ToolRegistry([
+        CurrentTimeTool(),
+        CalculatorTool(),
+        CurrencyConvertTool(),
+        WeatherTool(),
+        mock_knowledge,
+    ])
+
+    router = RuleRouter()
+    orch = Orchestrator(tmp_settings, Retriever(store, fake_embedder), mock_registry, router=router)
+
+    test_cases = [
+        ("where Mysore is located", "Karnataka", "https://en.wikipedia.org/wiki/Mysore"),
+        ("Where is Mysuru situated?", "Karnataka", "https://en.wikipedia.org/wiki/Mysore"),
+        ("Which state is Chennai in?", "Tamil Nadu", "https://en.wikipedia.org/wiki/Chennai"),
+        ("Tell me about Hyderabad's location.", "Telangana", "https://en.wikipedia.org/wiki/Hyderabad"),
+        ("Where is Bengaluru located?", "Karnataka", "https://en.wikipedia.org/wiki/Bengaluru"),
+        ("Where is Kyoto located?", "Japan", "https://en.wikipedia.org/wiki/Kyoto"),
+    ]
+
+    for q, expected_content, expected_url in test_cases:
+        decision = router.route(q)
+        assert not decision.use_documents, f"Expected use_documents=False for: {q}"
+        assert any(t.tool_name == "knowledge" for t in decision.tools), f"Expected knowledge tool for: {q}"
+        assert decision.reasoning == "General knowledge question: route to knowledge provider."
+
+        ans = orch.ask(q)
+        assert ans.sufficient_evidence, f"Expected sufficient evidence for: {q}"
+        assert expected_content in ans.answer, f"Answer missing expected content for: {q}"
+        assert expected_url in ans.answer, f"Answer missing expected URL for: {q}"
+        assert ans.document_evidence == []
+        assert any(c.kind == "tool" and c.label == "T1" for c in ans.live_evidence)
+
+
+def test_general_knowledge_provider_unavailable(tmp_settings, fake_embedder, store):
+    from agentic_rag.tools.knowledge import KnowledgeTool
+    from agentic_rag.tools.calculator import CalculatorTool
+    from agentic_rag.tools.currency import CurrencyConvertTool
+    from agentic_rag.tools.current_time import CurrentTimeTool
+    from agentic_rag.tools.weather import WeatherTool
+
+    # 1. Tool configured with available=False
+    disabled_tool = KnowledgeTool(available=False)
+    registry_disabled = ToolRegistry([CurrentTimeTool(), CalculatorTool(), CurrencyConvertTool(), WeatherTool(), disabled_tool])
+    orch_disabled = Orchestrator(tmp_settings, Retriever(store, fake_embedder), registry_disabled)
+
+    ans = orch_disabled.ask("Where Bengaluru is located?")
+    assert not ans.sufficient_evidence
+    assert "active knowledge provider" in ans.answer
+    assert "unavailable" in ans.answer
+    assert "Karnataka" not in ans.answer
+    assert ans.document_evidence == []
+
+    # 2. Tool omitted completely from registry
+    registry_empty = ToolRegistry([CurrentTimeTool(), CalculatorTool(), CurrencyConvertTool(), WeatherTool()])
+    orch_empty = Orchestrator(tmp_settings, Retriever(store, fake_embedder), registry_empty)
+
+    ans2 = orch_empty.ask("Where is Bangalore?")
+    assert not ans2.sufficient_evidence
+    assert "active knowledge provider" in ans2.answer
+    assert "unavailable" in ans2.answer
+    assert "Karnataka" not in ans2.answer
+    assert ans2.document_evidence == []
+
+
+def test_unsafe_broad_routing_avoided():
+    router = RuleRouter()
+
+    # Document / internal questions must NOT route to knowledge tool
+    r1 = router.route("Where is the company's confidential server?")
+    assert r1.use_documents
+    assert not any(t.tool_name == "knowledge" for t in r1.tools)
+
+    r2 = router.route("What is Project Falcon's code name?")
+    assert r2.use_documents
+    assert not any(t.tool_name == "knowledge" for t in r2.tools)
+
+    r3 = router.route("What is the CEO personal phone number?")
+    assert r3.use_documents
+    assert not any(t.tool_name == "knowledge" for t in r3.tools)
+
+    # Live tools must NOT route to knowledge tool
+    r4 = router.route("What time is it in Tokyo?")
+    assert any(t.tool_name == "current_time" for t in r4.tools)
+    assert not any(t.tool_name == "knowledge" for t in r4.tools)
+
+    r5 = router.route("What is the weather in Paris?")
+    assert any(t.tool_name == "weather" for t in r5.tools)
+    assert not any(t.tool_name == "knowledge" for t in r5.tools)
+
+    # Calculator must NOT route to knowledge tool
+    r6 = router.route("Calculate 125 × 48")
+    assert not r6.use_documents
+    assert any(t.tool_name == "calculator" for t in r6.tools)
+    assert not any(t.tool_name == "knowledge" for t in r6.tools)

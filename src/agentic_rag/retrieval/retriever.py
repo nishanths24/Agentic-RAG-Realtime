@@ -8,6 +8,33 @@ from agentic_rag.models import RetrievedPassage
 from agentic_rag.vectorstore.numpy_store import NumpyVectorStore
 
 _WS = re.compile(r"\s+")
+_PROJECT_RE = re.compile(r"\bproject\s+([A-Za-z0-9_-]+)\b", re.I)
+_META_BROAD_RE = re.compile(
+    r"\b(summarize|summary|overview|main\s+topic|key\s+information|key\s+points|key\s+details|"
+    r"uploaded\s+documents?|indexed\s+documents?|all\s+documents|what\s+does\s+.*(?:contain|cover|say))\b",
+    re.I,
+)
+
+
+_PROJECT_ATTR_WORDS = {
+    "code", "name", "brief", "review", "overview", "details", "detail", "plan",
+    "update", "updates", "milestone", "milestones", "owner", "lead", "status",
+    "document", "documents", "documentation", "work", "initiative", "info", "information",
+    "the", "a", "an", "this", "that", "is", "was", "are", "were", "our", "my", "your", "for", "in", "of",
+}
+
+
+def _extract_projects(text: str) -> set[str]:
+    res: set[str] = set()
+    for m in re.finditer(r"\bproject\s+([A-Za-z0-9_-]+)", text, re.I):
+        w = re.sub(r"['\u2019]s?$", "", m.group(1)).lower()
+        if w not in _PROJECT_ATTR_WORDS and len(w) > 1:
+            res.add(w)
+    for m in re.finditer(r"\b([A-Z][a-zA-Z0-9_-]*)\s+project\b", text):
+        w = re.sub(r"['\u2019]s?$", "", m.group(1)).lower()
+        if w not in _PROJECT_ATTR_WORDS and len(w) > 1:
+            res.add(w)
+    return res
 _STOP = {
     "the",
     "and",
@@ -64,21 +91,47 @@ class Retriever:
     ) -> list[RetrievedPassage]:
         cleaned = normalize_query(query, max_chars=max_chars)
         vector = self.embedder.embed_query(cleaned)
-        pool = self.store.search(vector, top_k=max(top_k * 3, top_k))
+        q_projects = _extract_projects(cleaned)
+        is_broad = bool(_META_BROAD_RE.search(cleaned))
+
+        pool_size = max(top_k * 5, 20) if (is_broad or q_projects) else max(top_k * 3, top_k)
+        pool = self.store.search(vector, top_k=pool_size)
         q_tokens = _content_tokens(cleaned)
         ranked: list[RetrievedPassage] = []
+
         for item in pool:
+            chunk_projects = _extract_projects(item.chunk.text)
+            # If query explicitly targets a named project, reject chunks from a conflicting project
+            if q_projects and chunk_projects and not (q_projects & chunk_projects):
+                continue
+
             lexical = _lexical_overlap(q_tokens, item.chunk.text)
             combined = 0.65 * item.score + 0.35 * lexical
+
+            is_project_match = bool(
+                q_projects
+                and (
+                    (q_projects & chunk_projects)
+                    or any(proj in item.chunk.source_path.lower() for proj in q_projects)
+                )
+            )
+            if is_project_match:
+                combined += 0.4
+            elif is_broad and item.chunk.chunk_index == 0:
+                combined += 0.2
+
             if combined < min_score:
                 continue
-            if q_tokens and lexical == 0.0 and item.score < 0.35:
+            if not is_broad and q_tokens and lexical == 0.0 and item.score < 0.35:
                 continue
+
             ranked.append(
                 RetrievedPassage(chunk=item.chunk, score=combined, rank=item.rank)
             )
+
         ranked.sort(key=lambda item: item.score, reverse=True)
-        selected = ranked[:top_k]
+        effective_top_k = max(top_k, 6) if (is_broad and q_projects) else top_k
+        selected = ranked[:effective_top_k]
         return [
             RetrievedPassage(chunk=item.chunk, score=item.score, rank=index)
             for index, item in enumerate(selected, start=1)

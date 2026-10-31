@@ -7,6 +7,7 @@ from agentic_rag.models import ToolResult
 from agentic_rag.tools.calculator import CalculatorTool
 from agentic_rag.tools.currency import CurrencyConvertTool
 from agentic_rag.tools.current_time import CurrentTimeTool
+from agentic_rag.tools.knowledge import KnowledgeTool
 from agentic_rag.tools.weather import WeatherTool
 
 
@@ -39,5 +40,20 @@ class ToolRegistry:
         return tool.run(validated, timeout_s=timeout_s)
 
 
-def default_tools() -> list[Any]:
-    return [CurrentTimeTool(), CalculatorTool(), CurrencyConvertTool(), WeatherTool()]
+def default_tools(settings: Any = None) -> list[Any]:
+    import os
+
+    search_key = getattr(settings, "search_api_key", None) if settings else os.getenv("SEARCH_API_KEY", "")
+    search_provider = getattr(settings, "search_provider", None) if settings else os.getenv("SEARCH_PROVIDER", "wikipedia")
+    search_endpoint = getattr(settings, "search_base_url", None) if settings else os.getenv("SEARCH_BASE_URL", "https://api.tavily.com/search")
+    return [
+        CurrentTimeTool(),
+        CalculatorTool(),
+        CurrencyConvertTool(),
+        WeatherTool(),
+        KnowledgeTool(
+            search_api_key=search_key or "",
+            search_provider=search_provider or "wikipedia",
+            search_endpoint=search_endpoint or "https://api.tavily.com/search",
+        ),
+    ]

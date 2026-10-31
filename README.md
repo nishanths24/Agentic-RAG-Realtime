@@ -1078,9 +1078,40 @@ Configuration is loaded from `.env` using [`src/agentic_rag/config.py`](file:///
 | `LLM_MODEL` | Model identifier when `LLM_PROVIDER=openai` | `gpt-4o-mini` | No | No |
 | `LLM_API_KEY` | API secret key when using an external LLM | `""` | Optional | **Yes** |
 | `LLM_BASE_URL` | Base endpoint for OpenAI-compatible client | `https://api.openai.com/v1` | No | No |
+| `SEARCH_API_KEY` | Optional API key for web search (e.g., Tavily) | `""` | Optional | **Yes** |
+| `SEARCH_PROVIDER`| Search/knowledge provider (`wikipedia`, `tavily`, `brave`)| `wikipedia` | No | No |
+| `SEARCH_BASE_URL`| Endpoint for search API | `https://api.tavily.com/search` | No | No |
 | `API_KEY` | Optional header secret to protect `POST /index` | `""` | Optional | **Yes** |
 | `HOST` | IP interface binding for web server | `127.0.0.1` | No | No |
 | `PORT` | Listening port for web server | `8000` | No | No |
+
+### General-Knowledge & Dynamic Web Search Setup
+
+The system provides dynamic knowledge retrieval for unseen general-knowledge and geographic queries (such as locations, states, capitals, and countries) without hardcoded question-and-answer dictionaries.
+
+1. **Default Dynamic Integration (Zero Setup Required):**
+   - When `SEARCH_API_KEY` is not provided, the system dynamically queries the **Wikipedia REST API** and **Open-Meteo Geocoding API** with the user's natural query.
+   - Grounded, concise answers are extracted along with canonical source URLs (e.g. `(Source: https://en.wikipedia.org/wiki/Mysore)`).
+
+2. **Web Search API Integration (Tavily / Brave):**
+   - To enable full web search across arbitrary general-knowledge queries, sign up for a search API key (e.g. at [Tavily](https://tavily.com/)).
+   - Add your key to your `.env` file:
+     ```bash
+     SEARCH_API_KEY=tvly-your-api-key-here
+     SEARCH_PROVIDER=tavily
+     SEARCH_BASE_URL=https://api.tavily.com/search
+     ```
+
+3. **Error Handling & Honest Abstention:**
+   - If the search/knowledge provider times out, fails, or is unconfigured, the application returns a clear, honest message explaining that the provider is unavailable.
+   - It sets `sufficient_evidence=False` and **never fabricates** ungrounded answers.
+   - Document retrieval remains strictly isolated: internal queries (like Project Falcon or Project Orion) continue to query internal document indexes only.
+
+4. **Running the Application:**
+   ```powershell
+   # Start the web server and API
+   python main.py serve --reload
+   ```
 
 ---
 
